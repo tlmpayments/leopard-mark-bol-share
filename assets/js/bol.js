@@ -375,11 +375,29 @@ function renderFreightBolHtml(d) {
   );
 }
 
+// Explicit @page sizing so the printed output is always exactly one US
+// Letter page (8.5in x 11in) regardless of the browser/OS/printer's own
+// default page size or margins — without this, printing was at the mercy of
+// whatever the browser assumed, which is what produced badly-fitted output.
+var PRINT_PAGE_STYLE =
+  '@page { size: letter; margin: 0.4in; }' +
+  'html, body { margin: 0; padding: 0; }' +
+  'body { background: #eceef1; }' +
+  '.print-page { width: 100%; max-width: 8.2in; margin: 0 auto 24px; background: #fff; padding: 24px; box-sizing: border-box; }' +
+  '.print-tip { max-width: 8.2in; margin: 0 auto 10px; padding: 8px 12px; background: #fff3cd; border: 1px solid #e0c46c; border-radius: 6px; font-size: 12px; color: #5c4a1a; font-family: Arial, sans-serif; }' +
+  '@media print {' +
+  '  body { background: #fff; }' +
+  '  .print-page { max-width: none; width: 100%; padding: 0; margin: 0; }' +
+  '}';
+
+var PRINT_TIP_HTML =
+  '<div class="print-tip no-print">Tip: for a clean printout (no browser date/URL banner), open the print dialog\'s "More settings" and uncheck "Headers and footers".</div>';
+
 function openBolPrintWindow(d) {
   var html = '<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(d.bolNumber) + '</title>' +
     '<base href="' + window.location.href + '">' +
-    '<style>body{margin:0;padding:24px;background:#eceef1;display:flex;justify-content:center;}</style></head>' +
-    '<body><div style="width:100%;max-width:820px;">' + renderBolHtml(d) + '</div></body></html>';
+    '<style>' + PRINT_PAGE_STYLE + '</style></head>' +
+    '<body>' + PRINT_TIP_HTML + '<div class="print-page">' + renderBolHtml(d) + '</div></body></html>';
   var w = window.open('', '_blank');
   w.document.open();
   w.document.write(html);

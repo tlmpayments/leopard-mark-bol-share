@@ -80,6 +80,7 @@
     </div>
 
     <div class="form-actions">
+      <button type="button" class="btn-secondary" id="dlv-add-batch">+ Add to Batch</button>
       <button type="submit" class="btn-primary">Generate &amp; Print</button>
     </div>
     <div class="status-msg" id="dlv-status"></div>
@@ -221,10 +222,25 @@
     </div>
 
     <div class="form-actions">
+      <button type="button" class="btn-secondary" id="frt-add-batch">+ Add to Batch</button>
       <button type="submit" class="btn-primary">Generate &amp; Print</button>
     </div>
     <div class="status-msg" id="frt-status"></div>
   </form>
+
+  <!-- ============== BATCH QUEUE ============== -->
+  <div class="card">
+    <div class="card-title">Batch Queue</div>
+    <div id="batch-empty" class="hint">No documents queued yet — fill in a form above and click "+ Add to Batch" to start a batch (up to 100).</div>
+    <div id="batch-list"></div>
+    <div class="batch-actions" id="batch-actions" style="display:none;">
+      <span class="hint" id="batch-count"></span>
+      <div class="batch-actions-buttons">
+        <button type="button" class="btn-secondary" id="batch-clear">Clear Batch</button>
+        <button type="button" class="btn-primary" id="batch-print">Print Batch</button>
+      </div>
+    </div>
+  </div>
 
 </div>
 

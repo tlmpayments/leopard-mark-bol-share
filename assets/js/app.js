@@ -130,6 +130,7 @@ function loadReferenceData() {
     addDeliveryLineRow();
     addFreightLineRow();
     setFormsEnabled(true);
+    renderBatchList();
     document.getElementById('dlv-status').textContent = '';
     document.getElementById('frt-status').textContent = '';
   }).catch(function (err) {
@@ -237,55 +238,37 @@ function readFreightLines() {
   }).filter(Boolean);
 }
 
-document.getElementById('form-delivery').addEventListener('submit', function (e) {
-  e.preventDefault();
-  var statusEl = document.getElementById('dlv-status');
-  statusEl.textContent = '';
-  statusEl.classList.remove('error');
-
+// Shared by the immediate "Generate & Print" submit and "Add to Batch" —
+// returns { d } on success or { error } so both call sites show the same
+// validation messages.
+function buildDeliveryDoc() {
   var lines = readDeliveryLines();
-  if (!lines.length) {
-    statusEl.textContent = 'Add at least one product line.';
-    statusEl.classList.add('error');
-    return;
-  }
+  if (!lines.length) return { error: 'Add at least one product line.' };
+
   var accIdx = document.getElementById('dlv-account').value;
-  if (accIdx === '') {
-    statusEl.textContent = 'Select a Ship To account.';
-    statusEl.classList.add('error');
-    return;
-  }
+  if (accIdx === '') return { error: 'Select a Ship To account.' };
   var acct = DATA.accounts[Number(accIdx)];
   var dateIso = document.getElementById('dlv-date').value || todayIso();
 
-  var d = {
-    docType: 'delivery',
-    bolNumber: document.getElementById('dlv-bolnumber').value.trim() || generateDocNumber('DR'),
-    invoiceNumber: document.getElementById('dlv-invoice').value.trim(),
-    date: formatDateDisplay(dateIso),
-    toAccount: acct,
-    deliveryWindow: document.getElementById('dlv-window').value.trim(),
-    receivingInstructions: document.getElementById('dlv-instructions').value.trim(),
-    lines: lines,
-    refNote: document.getElementById('dlv-refnote').value.trim(),
-    notes: document.getElementById('dlv-notes').value.trim()
+  return {
+    d: {
+      docType: 'delivery',
+      bolNumber: document.getElementById('dlv-bolnumber').value.trim() || generateDocNumber('DR'),
+      invoiceNumber: document.getElementById('dlv-invoice').value.trim(),
+      date: formatDateDisplay(dateIso),
+      toAccount: acct,
+      deliveryWindow: document.getElementById('dlv-window').value.trim(),
+      receivingInstructions: document.getElementById('dlv-instructions').value.trim(),
+      lines: lines,
+      refNote: document.getElementById('dlv-refnote').value.trim(),
+      notes: document.getElementById('dlv-notes').value.trim()
+    }
   };
+}
 
-  openBolPrintWindow(d);
-});
-
-document.getElementById('form-freight').addEventListener('submit', function (e) {
-  e.preventDefault();
-  var statusEl = document.getElementById('frt-status');
-  statusEl.textContent = '';
-  statusEl.classList.remove('error');
-
+function buildFreightDoc() {
   var lines = readFreightLines();
-  if (!lines.length) {
-    statusEl.textContent = 'Add at least one commodity line.';
-    statusEl.classList.add('error');
-    return;
-  }
+  if (!lines.length) return { error: 'Add at least one commodity line.' };
 
   var fromIdx = document.getElementById('frt-from-loc').value;
   var toIdx = document.getElementById('frt-to-loc').value;
@@ -296,16 +279,8 @@ document.getElementById('form-freight').addEventListener('submit', function (e) 
   var toName = document.getElementById('frt-to-name').value.trim();
   var toAddress = document.getElementById('frt-to-address').value.trim();
 
-  if (!fromLoc && !fromName) {
-    statusEl.textContent = 'Select a Ship From facility or enter a manual name.';
-    statusEl.classList.add('error');
-    return;
-  }
-  if (!toLoc && !toName) {
-    statusEl.textContent = 'Select a Ship To facility or enter a manual name.';
-    statusEl.classList.add('error');
-    return;
-  }
+  if (!fromLoc && !fromName) return { error: 'Select a Ship From facility or enter a manual name.' };
+  if (!toLoc && !toName) return { error: 'Select a Ship To facility or enter a manual name.' };
 
   var commodityIdx = document.getElementById('frt-commodity').value;
   var commodity = commodityIdx !== '' ? DATA.commodities[Number(commodityIdx)] : null;
@@ -326,37 +301,243 @@ document.getElementById('form-freight').addEventListener('submit', function (e) 
 
   var dateIso = document.getElementById('frt-date').value || todayIso();
 
-  var d = {
-    docType: 'freight',
-    bolNumber: document.getElementById('frt-bolnumber').value.trim() || generateDocNumber('BOL'),
-    date: formatDateDisplay(dateIso),
-    eventType: document.getElementById('frt-eventtype').value,
-    actor: document.getElementById('frt-actor').value.trim(),
-    fromLoc: fromLoc,
-    toLoc: toLoc,
-    fromName: fromName,
-    fromAddress: fromAddress,
-    toName: toName,
-    toAddress: toAddress,
-    carrier: document.getElementById('frt-carrier').value.trim(),
-    carrierPhone: document.getElementById('frt-carrier-phone').value.trim(),
-    weight: weight,
-    handlingUnitCount: huCount,
-    handlingUnitType: document.getElementById('frt-hu-type').value.trim(),
-    dimensions: dimsRaw,
-    freightClass: freightClass,
-    freightClassEstimated: freightClassEstimated,
-    commodityName: commodity ? commodity.Name : '',
-    nmfcNumber: commodity ? commodity.NMFCNumber : '',
-    originAppointment: document.getElementById('frt-origin-appt').value.trim(),
-    destinationAppointment: document.getElementById('frt-dest-appt').value.trim(),
-    lines: lines,
-    refNote: document.getElementById('frt-refnote').value.trim(),
-    notes: document.getElementById('frt-notes').value.trim()
+  return {
+    d: {
+      docType: 'freight',
+      bolNumber: document.getElementById('frt-bolnumber').value.trim() || generateDocNumber('BOL'),
+      date: formatDateDisplay(dateIso),
+      eventType: document.getElementById('frt-eventtype').value,
+      actor: document.getElementById('frt-actor').value.trim(),
+      fromLoc: fromLoc,
+      toLoc: toLoc,
+      fromName: fromName,
+      fromAddress: fromAddress,
+      toName: toName,
+      toAddress: toAddress,
+      carrier: document.getElementById('frt-carrier').value.trim(),
+      carrierPhone: document.getElementById('frt-carrier-phone').value.trim(),
+      weight: weight,
+      handlingUnitCount: huCount,
+      handlingUnitType: document.getElementById('frt-hu-type').value.trim(),
+      dimensions: dimsRaw,
+      freightClass: freightClass,
+      freightClassEstimated: freightClassEstimated,
+      commodityName: commodity ? commodity.Name : '',
+      nmfcNumber: commodity ? commodity.NMFCNumber : '',
+      originAppointment: document.getElementById('frt-origin-appt').value.trim(),
+      destinationAppointment: document.getElementById('frt-dest-appt').value.trim(),
+      lines: lines,
+      refNote: document.getElementById('frt-refnote').value.trim(),
+      notes: document.getElementById('frt-notes').value.trim()
+    }
   };
+}
 
-  openBolPrintWindow(d);
+document.getElementById('form-delivery').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var statusEl = document.getElementById('dlv-status');
+  statusEl.textContent = '';
+  statusEl.classList.remove('error');
+
+  var result = buildDeliveryDoc();
+  if (result.error) {
+    statusEl.textContent = result.error;
+    statusEl.classList.add('error');
+    return;
+  }
+  openBolPrintWindow(result.d);
 });
+
+document.getElementById('form-freight').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var statusEl = document.getElementById('frt-status');
+  statusEl.textContent = '';
+  statusEl.classList.remove('error');
+
+  var result = buildFreightDoc();
+  if (result.error) {
+    statusEl.textContent = result.error;
+    statusEl.classList.add('error');
+    return;
+  }
+  openBolPrintWindow(result.d);
+});
+
+// ---------------- Batch ----------------
+
+var BATCH_LIMIT = 100;
+var batch = [];
+
+function resetDeliveryForm() {
+  document.getElementById('dlv-bolnumber').value = '';
+  document.getElementById('dlv-bolnumber').placeholder = generateDocNumber('DR');
+  document.getElementById('dlv-invoice').value = '';
+  document.getElementById('dlv-account').value = '';
+  document.getElementById('dlv-window').value = '';
+  document.getElementById('dlv-instructions').value = '';
+  document.getElementById('dlv-refnote').value = '';
+  document.getElementById('dlv-notes').value = '';
+  document.getElementById('dlv-lines').innerHTML = '';
+  addDeliveryLineRow();
+}
+
+function resetFreightForm() {
+  // "Prepared By" is kept — a batch of freight moves is usually entered by
+  // the same person back-to-back, so re-typing a name each time is friction
+  // with no real benefit.
+  var preparedBy = document.getElementById('frt-actor').value;
+  document.getElementById('frt-bolnumber').value = '';
+  document.getElementById('frt-bolnumber').placeholder = generateDocNumber('BOL');
+  document.getElementById('frt-actor').value = preparedBy;
+  document.getElementById('frt-from-loc').value = '';
+  document.getElementById('frt-from-name').value = '';
+  document.getElementById('frt-from-address').value = '';
+  document.getElementById('frt-to-loc').value = '';
+  document.getElementById('frt-to-name').value = '';
+  document.getElementById('frt-to-address').value = '';
+  document.getElementById('frt-carrier').value = '';
+  document.getElementById('frt-carrier-phone').value = '';
+  document.getElementById('frt-weight').value = '';
+  document.getElementById('frt-hu-count').value = '';
+  document.getElementById('frt-hu-type').value = '';
+  document.getElementById('frt-dimensions').value = '';
+  document.getElementById('frt-freight-class').value = '';
+  document.getElementById('frt-commodity').value = '';
+  document.getElementById('frt-origin-appt').value = '';
+  document.getElementById('frt-dest-appt').value = '';
+  document.getElementById('frt-refnote').value = '';
+  document.getElementById('frt-notes').value = '';
+  document.getElementById('frt-lines').innerHTML = '';
+  addFreightLineRow();
+}
+
+function summarizeBatchItem(d) {
+  var lineCount = d.lines.length + ' item' + (d.lines.length === 1 ? '' : 's');
+  if (d.docType === 'delivery') {
+    var acctName = d.toAccount ? d.toAccount.BusinessName : '—';
+    return 'Delivery Receipt — ' + d.bolNumber + ' — ' + acctName + ' (' + lineCount + ')';
+  }
+  var fromLabel = d.fromLoc ? d.fromLoc.Name : (d.fromName || '—');
+  var toLabel = d.toLoc ? d.toLoc.Name : (d.toName || '—');
+  return 'Freight BOL — ' + d.bolNumber + ' — ' + fromLabel + ' → ' + toLabel + ' (' + lineCount + ')';
+}
+
+function updateBatchButtons() {
+  var atLimit = batch.length >= BATCH_LIMIT;
+  var label = batch.length ? ('+ Add to Batch (' + batch.length + '/' + BATCH_LIMIT + ')') : '+ Add to Batch';
+  ['dlv-add-batch', 'frt-add-batch'].forEach(function (id) {
+    var btn = document.getElementById(id);
+    btn.textContent = atLimit ? 'Batch full (100)' : label;
+    btn.disabled = !refDataLoaded || atLimit;
+  });
+}
+
+function renderBatchList() {
+  var listEl = document.getElementById('batch-list');
+  var emptyEl = document.getElementById('batch-empty');
+  var actionsEl = document.getElementById('batch-actions');
+  var countEl = document.getElementById('batch-count');
+
+  if (!batch.length) {
+    listEl.innerHTML = '';
+    emptyEl.style.display = '';
+    actionsEl.style.display = 'none';
+    updateBatchButtons();
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  actionsEl.style.display = '';
+  countEl.textContent = batch.length + ' / ' + BATCH_LIMIT + ' queued';
+
+  listEl.innerHTML = batch.map(function (item, i) {
+    return '<div class="batch-row"><span class="batch-row-label">' + (i + 1) + '. ' + escapeHtml(summarizeBatchItem(item)) + '</span>' +
+      '<button type="button" class="line-remove" data-idx="' + i + '">&times;</button></div>';
+  }).join('');
+
+  Array.prototype.slice.call(listEl.querySelectorAll('[data-idx]')).forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      batch.splice(Number(btn.dataset.idx), 1);
+      renderBatchList();
+    });
+  });
+
+  updateBatchButtons();
+}
+
+document.getElementById('dlv-add-batch').addEventListener('click', function () {
+  var statusEl = document.getElementById('dlv-status');
+  statusEl.textContent = '';
+  statusEl.classList.remove('error');
+
+  if (batch.length >= BATCH_LIMIT) {
+    statusEl.textContent = 'Batch is full (100) — print or clear it before adding more.';
+    statusEl.classList.add('error');
+    return;
+  }
+  var result = buildDeliveryDoc();
+  if (result.error) {
+    statusEl.textContent = result.error;
+    statusEl.classList.add('error');
+    return;
+  }
+  batch.push(result.d);
+  renderBatchList();
+  resetDeliveryForm();
+  statusEl.textContent = 'Added to batch (' + batch.length + '/' + BATCH_LIMIT + '). Form cleared for the next one.';
+});
+
+document.getElementById('frt-add-batch').addEventListener('click', function () {
+  var statusEl = document.getElementById('frt-status');
+  statusEl.textContent = '';
+  statusEl.classList.remove('error');
+
+  if (batch.length >= BATCH_LIMIT) {
+    statusEl.textContent = 'Batch is full (100) — print or clear it before adding more.';
+    statusEl.classList.add('error');
+    return;
+  }
+  var result = buildFreightDoc();
+  if (result.error) {
+    statusEl.textContent = result.error;
+    statusEl.classList.add('error');
+    return;
+  }
+  batch.push(result.d);
+  renderBatchList();
+  resetFreightForm();
+  statusEl.textContent = 'Added to batch (' + batch.length + '/' + BATCH_LIMIT + '). Form cleared for the next one.';
+});
+
+document.getElementById('batch-clear').addEventListener('click', function () {
+  if (!batch.length) return;
+  batch = [];
+  renderBatchList();
+});
+
+document.getElementById('batch-print').addEventListener('click', function () {
+  if (!batch.length) return;
+  openBatchPrintWindow(batch);
+});
+
+// PRINT_PAGE_STYLE / PRINT_TIP_HTML come from bol.js — reused as-is so a
+// batch printout looks identical to a single one, just one doc per page.
+function openBatchPrintWindow(items) {
+  var pagesHtml = items.map(function (item, i) {
+    var isLast = i === items.length - 1;
+    var breakStyle = isLast ? '' : 'page-break-after: always; break-after: page;';
+    return '<div class="print-page" style="' + breakStyle + '">' + renderBolHtml(item) + '</div>';
+  }).join('');
+
+  var html = '<!doctype html><html><head><meta charset="utf-8"><title>BOL Batch (' + items.length + ' documents)</title>' +
+    '<base href="' + window.location.href + '">' +
+    '<style>' + PRINT_PAGE_STYLE + '</style></head>' +
+    '<body>' + PRINT_TIP_HTML + pagesHtml + '</body></html>';
+  var w = window.open('', '_blank');
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
 
 // ---------------- Init ----------------
 
@@ -365,4 +546,5 @@ document.getElementById('frt-date').value = todayIso();
 document.getElementById('dlv-bolnumber').placeholder = generateDocNumber('DR');
 document.getElementById('frt-bolnumber').placeholder = generateDocNumber('BOL');
 setFormsEnabled(false);
+renderBatchList();
 loadReferenceData();
