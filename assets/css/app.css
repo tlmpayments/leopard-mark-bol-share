@@ -122,7 +122,8 @@ html, body {
 }
 .hint { font-size: 11px; color: var(--silver-dim); margin-top: 2px; }
 
-.lines-table { width: 100%; border-collapse: collapse; }
+.table-scroll { overflow-x: auto; }
+.lines-table { width: 100%; border-collapse: collapse; min-width: 480px; }
 .lines-table th {
   text-align: left;
   font-size: 10.5px;
@@ -131,6 +132,7 @@ html, body {
   color: var(--silver-dim);
   padding: 0 8px 8px 0;
   font-weight: 600;
+  white-space: nowrap;
 }
 .lines-table td { padding: 4px 8px 4px 0; vertical-align: top; }
 .lines-table input, .lines-table select {
@@ -143,6 +145,21 @@ html, body {
   font-size: 13px;
   font-family: var(--font-body);
 }
+
+.lot-cell { min-width: 300px; }
+.lot-builder { display: flex; flex-wrap: wrap; gap: 4px; }
+.lot-builder select, .lot-builder input { width: auto; }
+.lot-builder .dlv-line-facility { max-width: 150px; }
+.lot-builder .dlv-line-facility-custom { width: 46px; text-align: center; }
+.lot-builder .dlv-line-pkgdate { width: 136px; }
+.lot-builder .dlv-line-run { width: 40px; text-align: center; }
+.lot-preview {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--silver-dim);
+  font-family: 'SF Mono', Menlo, monospace;
+}
+.lot-preview span { color: var(--white); font-weight: 600; }
 .line-remove {
   background: none;
   border: none;

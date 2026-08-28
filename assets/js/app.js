@@ -61,6 +61,43 @@ function skuLabel(s) {
   return [s.Brand, s.Product, s.PackageType].filter(Boolean).join(' — ');
 }
 
+// Lot/Batch Code = Facility(2) + Brand(3) + YY + MM + DD + Run/Variation(1),
+// per TLM's Inventory Lot # key (e.g. 01SGB2601301 = East Brother, SGB,
+// packaged 1/30/26, run 1). Brand comes from the line's selected SKU, not a
+// separate input, since it must always match.
+var LOT_FACILITIES = [
+  { code: '01', name: 'East Brother Beer' },
+  { code: '02', name: 'Beachwood Brewing' },
+  { code: '03', name: 'Prost Brewing' }
+];
+
+function computeLotCode(facilityCode, brand, pkgDateIso, run) {
+  facilityCode = (facilityCode || '').trim().toUpperCase();
+  if (facilityCode.length !== 2 || !brand || !pkgDateIso) return '';
+  var p = pkgDateIso.split('-');
+  var yy = p[0].slice(2);
+  var mm = p[1];
+  var dd = p[2];
+  var runChar = String(run || '1').trim().slice(0, 1) || '1';
+  return (facilityCode + String(brand).toUpperCase() + yy + mm + dd + runChar).toUpperCase();
+}
+
+function computeRowLot(tr) {
+  var facilitySel = tr.querySelector('.dlv-line-facility');
+  var customInput = tr.querySelector('.dlv-line-facility-custom');
+  var facilityCode = facilitySel.value === '__other' ? customInput.value : facilitySel.value;
+  var pkgDate = tr.querySelector('.dlv-line-pkgdate').value;
+  var run = tr.querySelector('.dlv-line-run').value;
+  var skuIdx = tr.querySelector('.dlv-line-sku').value;
+  var sku = skuIdx !== '' ? DATA.skus[Number(skuIdx)] : null;
+  return computeLotCode(facilityCode, sku ? sku.Brand : '', pkgDate, run);
+}
+
+function refreshLotPreview(tr) {
+  var el = tr.querySelector('.dlv-line-lot-value');
+  if (el) el.textContent = computeRowLot(tr) || '—';
+}
+
 // Accounts carry a free-text DeliveryWindowNote plus structured per-day
 // windows (MondayWindow..FridayWindow) — real data has either, both, or
 // neither, so combine whatever is present into one readable line rather
@@ -163,11 +200,34 @@ function addDeliveryLineRow() {
   var skuOptionsHtml = '<option value="">— SKU —</option>' + DATA.skus.map(function (s, i) {
     return '<option value="' + i + '">' + escapeHtml(skuLabel(s)) + '</option>';
   }).join('');
+  var facilityOptionsHtml = LOT_FACILITIES.map(function (f) {
+    return '<option value="' + f.code + '">' + f.code + ' ' + escapeHtml(f.name) + '</option>';
+  }).join('') + '<option value="__other">Other…</option>';
+
   tr.innerHTML =
     '<td><select class="dlv-line-sku">' + skuOptionsHtml + '</select></td>' +
-    '<td><input type="text" class="dlv-line-lot" /></td>' +
+    '<td class="lot-cell">' +
+    '  <div class="lot-builder">' +
+    '    <select class="dlv-line-facility" title="Packaging facility">' + facilityOptionsHtml + '</select>' +
+    '    <input type="text" class="dlv-line-facility-custom" placeholder="code" maxlength="2" style="display:none;" title="Custom 2-digit facility code" />' +
+    '    <input type="date" class="dlv-line-pkgdate" title="Packaging date" />' +
+    '    <input type="text" class="dlv-line-run" value="1" maxlength="1" title="Run # (or A/B/C for same-day variations)" />' +
+    '  </div>' +
+    '  <div class="lot-preview">Lot #: <span class="dlv-line-lot-value">—</span></div>' +
+    '</td>' +
     '<td><input type="number" class="dlv-line-qty" min="0" value="1" /></td>' +
     '<td><button type="button" class="line-remove">&times;</button></td>';
+
+  var facilitySelect = tr.querySelector('.dlv-line-facility');
+  var customInput = tr.querySelector('.dlv-line-facility-custom');
+  facilitySelect.addEventListener('change', function () {
+    customInput.style.display = facilitySelect.value === '__other' ? '' : 'none';
+    refreshLotPreview(tr);
+  });
+  ['.dlv-line-facility-custom', '.dlv-line-pkgdate', '.dlv-line-run', '.dlv-line-sku'].forEach(function (sel) {
+    tr.querySelector(sel).addEventListener('input', function () { refreshLotPreview(tr); });
+    tr.querySelector(sel).addEventListener('change', function () { refreshLotPreview(tr); });
+  });
   tr.querySelector('.line-remove').addEventListener('click', function () { tr.remove(); });
   tbody.appendChild(tr);
 }
@@ -214,8 +274,8 @@ function readDeliveryLines() {
     if (!sku) return null;
     return {
       sku: sku.SKU,
-      lot: tr.querySelector('.dlv-line-lot').value.trim(),
-      description: [sku.Brand, sku.Product].filter(Boolean).join(' '),
+      lot: computeRowLot(tr),
+      description: sku.Product,
       package: sku.PackageType,
       qty: Number(tr.querySelector('.dlv-line-qty').value) || 0,
       weightPerUnit: Number(sku.WeightPerUnit) || 0,
@@ -231,7 +291,7 @@ function readFreightLines() {
     if (!sku) return null;
     return {
       sku: sku.SKU,
-      description: [sku.Brand, sku.Product].filter(Boolean).join(' '),
+      description: sku.Product,
       package: sku.PackageType,
       qty: Number(tr.querySelector('.frt-line-qty').value) || 0
     };

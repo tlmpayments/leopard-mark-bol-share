@@ -80,7 +80,9 @@ function renderDeliveryReceiptHtml(d) {
   var rows = lines.map(function (l) {
     var lineWeight = (Number(l.qty) || 0) * (Number(l.weightPerUnit) || 0);
     return '<tr>' +
-      '<td><div class="dr-sku-line">' + escapeHtml(l.sku) + (l.lot ? ' | Lot # ' + escapeHtml(l.lot) : '') + '</div>' + escapeHtml(l.description) + '</td>' +
+      '<td class="mono">' + escapeHtml(l.sku) + '</td>' +
+      '<td class="mono">' + escapeHtml(l.lot || '—') + '</td>' +
+      '<td>' + escapeHtml(l.description) + '</td>' +
       '<td>' + escapeHtml(l.package || '') + '</td>' +
       '<td class="num">' + escapeHtml(String(l.qty)) + '</td>' +
       '<td class="num">' + (Number(l.weightPerUnit) > 0 ? Number(l.weightPerUnit) : '—') + '</td>' +
@@ -129,7 +131,7 @@ function renderDeliveryReceiptHtml(d) {
     '  table.dr-items thead td{background:#d6dcef;color:#1b2c6b;font-size:10.5px;font-weight:800;letter-spacing:.03em;padding:6px 11px;border-bottom:1px solid #aeb7d6;}' +
     '  table.dr-items tbody td{padding:8px 11px;font-size:12px;background:#fff;vertical-align:top;}' +
     '  table.dr-items td.num,table.dr-items th.num{text-align:right;white-space:nowrap;}' +
-    '  .dr-sku-line{font-weight:700;color:#1b2c6b;font-size:11px;margin-bottom:2px;}' +
+    '  table.dr-items td.mono{font-weight:700;color:#1b2c6b;font-size:11px;white-space:nowrap;}' +
     '  .dr-totcond{display:grid;grid-template-columns:1fr 1.35fr;}' +
     '  .dr-totcond>div:first-child{border-right:1px solid #aeb7d6;}' +
     '  .dr-totbox{padding:8px 15px;background:#f8f9fc;font-size:12px;}' +
@@ -185,7 +187,7 @@ function renderDeliveryReceiptHtml(d) {
     '    </div>') : '') +
     '    <div class="dr-block">' +
     '      <div class="dr-bar">PRODUCTS DELIVERED</div>' +
-    '      <table class="dr-items"><thead><tr><td>DESCRIPTION</td><td>PKG TYPE</td><td class="num">QTY</td><td class="num">WEIGHT (LBS)</td><td class="num">TOTAL WEIGHT</td></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '      <table class="dr-items"><thead><tr><td>SKU</td><td>LOT #</td><td>DESCRIPTION</td><td>PKG TYPE</td><td class="num">QTY</td><td class="num">WEIGHT (LBS)</td><td class="num">TOTAL WEIGHT</td></tr></thead><tbody>' + rows + '</tbody></table>' +
     '    </div>' +
     '    <div class="dr-block dr-totcond">' +
     '      <div>' +

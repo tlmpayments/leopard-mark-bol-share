@@ -56,12 +56,14 @@
 
     <div class="card">
       <div class="card-title">Products Delivered</div>
-      <table class="lines-table">
-        <thead>
-          <tr><th style="width:30%">SKU</th><th>Lot #</th><th class="num" style="width:70px">Qty</th><th style="width:40px"></th></tr>
-        </thead>
-        <tbody id="dlv-lines"></tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="lines-table">
+          <thead>
+            <tr><th style="width:22%">SKU</th><th>Lot # (Facility / Packaging Date / Run)</th><th class="num" style="width:70px">Qty</th><th style="width:40px"></th></tr>
+          </thead>
+          <tbody id="dlv-lines"></tbody>
+        </table>
+      </div>
       <button type="button" class="btn-add-line" id="dlv-add-line">+ Add line item</button>
     </div>
 
@@ -198,12 +200,14 @@
 
     <div class="card">
       <div class="card-title">Commodities Shipped</div>
-      <table class="lines-table">
-        <thead>
-          <tr><th style="width:35%">SKU</th><th class="num" style="width:70px">Qty</th><th style="width:40px"></th></tr>
-        </thead>
-        <tbody id="frt-lines"></tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="lines-table">
+          <thead>
+            <tr><th style="width:35%">SKU</th><th class="num" style="width:70px">Qty</th><th style="width:40px"></th></tr>
+          </thead>
+          <tbody id="frt-lines"></tbody>
+        </table>
+      </div>
       <button type="button" class="btn-add-line" id="frt-add-line">+ Add line item</button>
     </div>
 
