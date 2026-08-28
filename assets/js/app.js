@@ -61,7 +61,40 @@ function skuLabel(s) {
   return [s.Brand, s.Product, s.PackageType].filter(Boolean).join(' — ');
 }
 
+// Accounts carry a free-text DeliveryWindowNote plus structured per-day
+// windows (MondayWindow..FridayWindow) — real data has either, both, or
+// neither, so combine whatever is present into one readable line rather
+// than picking just one column.
+function buildDeliveryWindowSummary(acct) {
+  var parts = [];
+  if (acct.DeliveryWindowNote) parts.push(acct.DeliveryWindowNote);
+  var days = [
+    ['Mon', 'MondayWindow'], ['Tue', 'TuesdayWindow'], ['Wed', 'WednesdayWindow'],
+    ['Thu', 'ThursdayWindow'], ['Fri', 'FridayWindow']
+  ];
+  var dayParts = days
+    .filter(function (d) { return acct[d[1]]; })
+    .map(function (d) { return d[0] + ' ' + acct[d[1]]; });
+  if (dayParts.length) parts.push(dayParts.join(', '));
+  return parts.join(' — ');
+}
+
+var refDataLoaded = false;
+
+function setFormsEnabled(enabled) {
+  ['dlv-add-line', 'frt-add-line'].forEach(function (id) {
+    document.getElementById(id).disabled = !enabled;
+  });
+  document.querySelectorAll('#form-delivery button[type="submit"], #form-freight button[type="submit"]').forEach(function (btn) {
+    btn.disabled = !enabled;
+  });
+}
+
 function loadReferenceData() {
+  setFormsEnabled(false);
+  document.getElementById('dlv-status').textContent = 'Loading accounts & SKUs…';
+  document.getElementById('frt-status').textContent = 'Loading facilities, SKUs & commodities…';
+
   return Promise.all([
     apiGet('accounts'), apiGet('skus'), apiGet('locations'), apiGet('commodities')
   ]).then(function (results) {
@@ -74,8 +107,20 @@ function loadReferenceData() {
     fillSelect(document.getElementById('frt-from-loc'), DATA.locations, function (l) { return l.Name + (l.City ? ' (' + l.City + ', ' + l.State + ')' : ''); }, '— Select facility —');
     fillSelect(document.getElementById('frt-to-loc'), DATA.locations, function (l) { return l.Name + (l.City ? ' (' + l.City + ', ' + l.State + ')' : ''); }, '— Select facility —');
     fillSelect(document.getElementById('frt-commodity'), DATA.commodities, function (c) { return c.Name; }, '— Select commodity —');
+
+    refDataLoaded = true;
+    addDeliveryLineRow();
+    addFreightLineRow();
+    setFormsEnabled(true);
+    document.getElementById('dlv-status').textContent = '';
+    document.getElementById('frt-status').textContent = '';
   }).catch(function (err) {
     console.error('Failed to load reference data', err);
+    var msg = 'Failed to load accounts/SKUs — check your connection and reload the page.';
+    document.getElementById('dlv-status').textContent = msg;
+    document.getElementById('dlv-status').classList.add('error');
+    document.getElementById('frt-status').textContent = msg;
+    document.getElementById('frt-status').classList.add('error');
   });
 }
 
@@ -124,6 +169,22 @@ function addFreightLineRow() {
 
 document.getElementById('dlv-add-line').addEventListener('click', addDeliveryLineRow);
 document.getElementById('frt-add-line').addEventListener('click', addFreightLineRow);
+
+// ---------------- Account autofill ----------------
+
+document.getElementById('dlv-account').addEventListener('change', function () {
+  var idx = this.value;
+  var windowEl = document.getElementById('dlv-window');
+  var instrEl = document.getElementById('dlv-instructions');
+  if (idx === '') {
+    windowEl.value = '';
+    instrEl.value = '';
+    return;
+  }
+  var acct = DATA.accounts[Number(idx)];
+  windowEl.value = buildDeliveryWindowSummary(acct);
+  instrEl.value = acct.DeliveryInstructions || '';
+});
 
 // ---------------- Build & render ----------------
 
@@ -185,8 +246,8 @@ document.getElementById('form-delivery').addEventListener('submit', function (e)
     invoiceNumber: document.getElementById('dlv-invoice').value.trim(),
     date: formatDateDisplay(dateIso),
     toAccount: acct,
-    deliveryWindow: document.getElementById('dlv-window').value.trim() || acct.DeliveryWindowNote,
-    receivingInstructions: document.getElementById('dlv-instructions').value.trim() || acct.DeliveryInstructions,
+    deliveryWindow: document.getElementById('dlv-window').value.trim(),
+    receivingInstructions: document.getElementById('dlv-instructions').value.trim(),
     lines: lines,
     refNote: document.getElementById('dlv-refnote').value.trim(),
     notes: document.getElementById('dlv-notes').value.trim()
@@ -285,6 +346,5 @@ document.getElementById('dlv-date').value = todayIso();
 document.getElementById('frt-date').value = todayIso();
 document.getElementById('dlv-bolnumber').placeholder = generateDocNumber('DR');
 document.getElementById('frt-bolnumber').placeholder = generateDocNumber('BOL');
-addDeliveryLineRow();
-addFreightLineRow();
+setFormsEnabled(false);
 loadReferenceData();
