@@ -64,17 +64,35 @@ function skuLabel(s) {
 // Accounts carry a free-text DeliveryWindowNote plus structured per-day
 // windows (MondayWindow..FridayWindow) — real data has either, both, or
 // neither, so combine whatever is present into one readable line rather
-// than picking just one column.
+// than picking just one column. Consecutive days sharing the same window
+// (common — e.g. Mon-Fri all "12pm - 5pm") collapse into one range instead
+// of repeating five times.
+var DELIVERY_DAY_DEFS = [
+  ['Mon', 'MondayWindow'], ['Tue', 'TuesdayWindow'], ['Wed', 'WednesdayWindow'],
+  ['Thu', 'ThursdayWindow'], ['Fri', 'FridayWindow']
+];
+
 function buildDeliveryWindowSummary(acct) {
   var parts = [];
   if (acct.DeliveryWindowNote) parts.push(acct.DeliveryWindowNote);
-  var days = [
-    ['Mon', 'MondayWindow'], ['Tue', 'TuesdayWindow'], ['Wed', 'WednesdayWindow'],
-    ['Thu', 'ThursdayWindow'], ['Fri', 'FridayWindow']
-  ];
-  var dayParts = days
-    .filter(function (d) { return acct[d[1]]; })
-    .map(function (d) { return d[0] + ' ' + acct[d[1]]; });
+
+  var groups = [];
+  DELIVERY_DAY_DEFS.forEach(function (d, i) {
+    var val = acct[d[1]];
+    if (!val) return;
+    var last = groups[groups.length - 1];
+    if (last && last.value === val && last.endIdx === i - 1) {
+      last.endIdx = i;
+    } else {
+      groups.push({ value: val, startIdx: i, endIdx: i });
+    }
+  });
+  var dayParts = groups.map(function (g) {
+    var startLabel = DELIVERY_DAY_DEFS[g.startIdx][0];
+    var endLabel = DELIVERY_DAY_DEFS[g.endIdx][0];
+    var label = g.startIdx === g.endIdx ? startLabel : (startLabel + '–' + endLabel);
+    return label + ' ' + g.value;
+  });
   if (dayParts.length) parts.push(dayParts.join(', '));
   return parts.join(' — ');
 }
