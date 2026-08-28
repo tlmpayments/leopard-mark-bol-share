@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>TLM Bill of Lading Maker</title>
+<link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <img src="assets/img/logo.png" alt="The Leopard Mark" onerror="this.style.display='none'" />
+    <div>
+      <h1>Bill of Lading Maker</h1>
+      <div class="sub">Fill in the details below, then generate a printable document.</div>
+    </div>
+  </div>
+
+  <div class="doc-toggle">
+    <button type="button" class="active" data-doctype="delivery">Delivery Receipt</button>
+    <button type="button" data-doctype="freight">Freight / Straight BOL</button>
+  </div>
+
+  <!-- ============== DELIVERY RECEIPT FORM ============== -->
+  <form id="form-delivery">
+    <div class="card">
+      <div class="card-title">Shipment Details</div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Delivery / Document #</label>
+          <input type="text" id="dlv-bolnumber" />
+        </div>
+        <div class="form-field">
+          <label>Date</label>
+          <input type="date" id="dlv-date" />
+        </div>
+        <div class="form-field">
+          <label>Invoice # <span class="hint">(optional)</span></label>
+          <input type="text" id="dlv-invoice" placeholder="e.g. INV-10432" />
+        </div>
+        <div class="form-field">
+          <label>Ship To (Account)</label>
+          <select id="dlv-account"></select>
+        </div>
+        <div class="form-field span2">
+          <label>Delivery Window <span class="hint">(optional)</span></label>
+          <input type="text" id="dlv-window" placeholder="e.g. Tues/Thurs 10am–2pm" />
+        </div>
+        <div class="form-field span2">
+          <label>Receiving Instructions <span class="hint">(optional)</span></label>
+          <textarea id="dlv-instructions"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Products Delivered</div>
+      <table class="lines-table">
+        <thead>
+          <tr><th style="width:30%">SKU</th><th>Lot #</th><th class="num" style="width:70px">Qty</th><th style="width:40px"></th></tr>
+        </thead>
+        <tbody id="dlv-lines"></tbody>
+      </table>
+      <button type="button" class="btn-add-line" id="dlv-add-line">+ Add line item</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Notes</div>
+      <div class="form-grid">
+        <div class="form-field span2">
+          <label>Reference Note <span class="hint">(optional)</span></label>
+          <input type="text" id="dlv-refnote" />
+        </div>
+        <div class="form-field span2">
+          <label>Notes <span class="hint">(optional)</span></label>
+          <input type="text" id="dlv-notes" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Generate &amp; Print</button>
+    </div>
+    <div class="status-msg" id="dlv-status"></div>
+  </form>
+
+  <!-- ============== FREIGHT BOL FORM ============== -->
+  <form id="form-freight" style="display:none;">
+    <div class="card">
+      <div class="card-title">Shipment Details</div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>BOL #</label>
+          <input type="text" id="frt-bolnumber" />
+        </div>
+        <div class="form-field">
+          <label>Date</label>
+          <input type="date" id="frt-date" />
+        </div>
+        <div class="form-field">
+          <label>Move Type</label>
+          <select id="frt-eventtype">
+            <option value="TRANSFER">Transfer</option>
+            <option value="INCOMING">Incoming / Receive Materials</option>
+            <option value="RETURN">Return</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Prepared By</label>
+          <input type="text" id="frt-actor" placeholder="Your name" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Ship From</div>
+      <div class="form-grid">
+        <div class="form-field span2">
+          <label>Facility</label>
+          <select id="frt-from-loc"></select>
+        </div>
+        <div class="form-field">
+          <label>Or manual name <span class="hint">(if not listed)</span></label>
+          <input type="text" id="frt-from-name" />
+        </div>
+        <div class="form-field">
+          <label>Manual address</label>
+          <input type="text" id="frt-from-address" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Ship To</div>
+      <div class="form-grid">
+        <div class="form-field span2">
+          <label>Facility</label>
+          <select id="frt-to-loc"></select>
+        </div>
+        <div class="form-field">
+          <label>Or manual name <span class="hint">(if not listed)</span></label>
+          <input type="text" id="frt-to-name" />
+        </div>
+        <div class="form-field">
+          <label>Manual address</label>
+          <input type="text" id="frt-to-address" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Carrier &amp; Freight</div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Carrier</label>
+          <input type="text" id="frt-carrier" />
+        </div>
+        <div class="form-field">
+          <label>Carrier Phone</label>
+          <input type="text" id="frt-carrier-phone" />
+        </div>
+        <div class="form-field">
+          <label>Weight (lbs)</label>
+          <input type="number" id="frt-weight" min="0" />
+        </div>
+        <div class="form-field">
+          <label>Handling Units</label>
+          <input type="number" id="frt-hu-count" min="0" />
+        </div>
+        <div class="form-field">
+          <label>Handling Unit Type</label>
+          <input type="text" id="frt-hu-type" placeholder="e.g. Pallets" />
+        </div>
+        <div class="form-field">
+          <label>Dimensions (L x W x H, in)</label>
+          <input type="text" id="frt-dimensions" placeholder="e.g. 48 x 40 x 48" />
+        </div>
+        <div class="form-field">
+          <label>Freight Class <span class="hint">(estimated from dims/weight if blank)</span></label>
+          <input type="text" id="frt-freight-class" />
+        </div>
+        <div class="form-field">
+          <label>Commodity</label>
+          <select id="frt-commodity"></select>
+        </div>
+        <div class="form-field">
+          <label>Origin Appointment #</label>
+          <input type="text" id="frt-origin-appt" />
+        </div>
+        <div class="form-field">
+          <label>Destination Appointment #</label>
+          <input type="text" id="frt-dest-appt" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Commodities Shipped</div>
+      <table class="lines-table">
+        <thead>
+          <tr><th style="width:35%">SKU</th><th class="num" style="width:70px">Qty</th><th style="width:40px"></th></tr>
+        </thead>
+        <tbody id="frt-lines"></tbody>
+      </table>
+      <button type="button" class="btn-add-line" id="frt-add-line">+ Add line item</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Notes</div>
+      <div class="form-grid">
+        <div class="form-field span2">
+          <label>Reference Note <span class="hint">(optional)</span></label>
+          <input type="text" id="frt-refnote" />
+        </div>
+        <div class="form-field span2">
+          <label>Notes <span class="hint">(optional)</span></label>
+          <input type="text" id="frt-notes" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Generate &amp; Print</button>
+    </div>
+    <div class="status-msg" id="frt-status"></div>
+  </form>
+
+</div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/bol.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
