@@ -86,20 +86,59 @@ function computeLotCode(facilityCode, brand, pkgDateIso, run) {
   return (facilityCode + String(brand).toUpperCase() + yy + mm + dd + runChar).toUpperCase();
 }
 
+// Tap handles (standard or premium, either brand) are merchandise, not a
+// packaged/lot-tracked product — they never get a Lot #. Everything else
+// (kegs, cases, glassware, ...) does. Matched on package type text so it
+// applies to any tap handle variant without hardcoding SKU codes.
+function skuRequiresLot(sku) {
+  return !sku || !/tap handle/i.test(String(sku.PackageType || ''));
+}
+
+function selectedSku(tr) {
+  var skuIdx = tr.querySelector('.dlv-line-sku').value;
+  return skuIdx !== '' ? DATA.skus[Number(skuIdx)] : null;
+}
+
 function computeRowLot(tr) {
+  var sku = selectedSku(tr);
+  if (!skuRequiresLot(sku)) return '';
   var facilitySel = tr.querySelector('.dlv-line-facility');
   var customInput = tr.querySelector('.dlv-line-facility-custom');
   var facilityCode = facilitySel.value === '__other' ? customInput.value : facilitySel.value;
   var pkgDate = tr.querySelector('.dlv-line-pkgdate').value;
   var run = tr.querySelector('.dlv-line-run').value;
-  var skuIdx = tr.querySelector('.dlv-line-sku').value;
-  var sku = skuIdx !== '' ? DATA.skus[Number(skuIdx)] : null;
   return computeLotCode(facilityCode, sku ? sku.Brand : '', pkgDate, run);
 }
 
 function refreshLotPreview(tr) {
+  var sku = selectedSku(tr);
+  var needsLot = skuRequiresLot(sku);
+  tr.querySelector('.lot-builder').style.display = needsLot ? '' : 'none';
+  tr.querySelector('.lot-preview').style.display = needsLot ? '' : 'none';
+  tr.querySelector('.lot-no-note').style.display = needsLot ? 'none' : '';
   var el = tr.querySelector('.dlv-line-lot-value');
   if (el) el.textContent = computeRowLot(tr) || '—';
+}
+
+// The live SKU Master's single "Tap Handle" entry per brand becomes two
+// selectable variants here — Standard and Premium — since that split only
+// matters for document generation, not real inventory tracking.
+function expandTapHandleSkus(skus) {
+  var expanded = [];
+  skus.forEach(function (s) {
+    if (String(s.PackageType || '').trim().toLowerCase() === 'tap handle') {
+      ['Standard', 'Premium'].forEach(function (variant) {
+        var copy = {};
+        for (var k in s) copy[k] = s[k];
+        copy.SKU = s.SKU + '-' + variant.toUpperCase();
+        copy.PackageType = variant + ' Tap Handle';
+        expanded.push(copy);
+      });
+    } else {
+      expanded.push(s);
+    }
+  });
+  return expanded;
 }
 
 // Accounts carry a free-text DeliveryWindowNote plus structured per-day
@@ -158,7 +197,7 @@ function loadReferenceData() {
     apiGet('accounts'), apiGet('skus'), apiGet('locations'), apiGet('commodities')
   ]).then(function (results) {
     DATA.accounts = (results[0] && results[0].accounts) || [];
-    DATA.skus = (results[1] && results[1].skus) || [];
+    DATA.skus = expandTapHandleSkus((results[1] && results[1].skus) || []);
     DATA.locations = (results[2] && results[2].locations) || [];
     DATA.commodities = (results[3] && results[3].commodities) || [];
 
@@ -218,6 +257,7 @@ function addDeliveryLineRow() {
     '    <input type="text" class="dlv-line-run" value="1" maxlength="1" title="Run # (or A/B/C for same-day variations)" />' +
     '  </div>' +
     '  <div class="lot-preview">Lot #: <span class="dlv-line-lot-value">—</span></div>' +
+    '  <div class="lot-no-note hint" style="display:none;">No lot # required</div>' +
     '</td>' +
     '<td><input type="number" class="dlv-line-qty" min="0" value="1" /></td>' +
     '<td><button type="button" class="line-remove">&times;</button></td>';
@@ -233,6 +273,7 @@ function addDeliveryLineRow() {
     tr.querySelector(sel).addEventListener('change', function () { refreshLotPreview(tr); });
   });
   tr.querySelector('.line-remove').addEventListener('click', function () { tr.remove(); });
+  refreshLotPreview(tr);
   tbody.appendChild(tr);
 }
 
