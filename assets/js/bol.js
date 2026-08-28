@@ -266,8 +266,19 @@ function renderFreightBolHtml(d) {
 
   var totalUnits = d.lines.reduce(function (s, l) { return s + Number(l.qty || 0); }, 0);
 
-  function facilityBlock(title, loc, hoursKey, instrKey) {
-    if (!loc) return '<div class="bol-party"><div class="h">' + title + '</div><div class="name">—</div></div>';
+  // loc is a known Location record; manualName/manualAddress is what's
+  // typed when the shipment is to/from somewhere not in the Locations list
+  // (a customer dock, a 3rd-party yard, etc.) — one party block either way,
+  // rather than a labeled-but-blank box plus a second unlabeled one below it.
+  function facilityBlock(title, loc, hoursKey, instrKey, manualName, manualAddress) {
+    if (!loc) {
+      if (!manualName) return '<div class="bol-party"><div class="h">' + title + '</div><div class="name">—</div></div>';
+      return '<div class="bol-party">' +
+        '<div class="h">' + title + '</div>' +
+        '<div class="name">' + escapeHtml(manualName) + '</div>' +
+        (manualAddress ? '<div class="line">' + escapeHtml(manualAddress) + '</div>' : '') +
+        '</div>';
+    }
     var dock = String(loc.HasLoadingDock).toUpperCase() === 'TRUE' ? 'Loading dock available' : 'No loading dock';
     var lift = String(loc.LiftgateRequired).toUpperCase() === 'TRUE' ? 'Liftgate required' : 'Liftgate not required';
     return '<div class="bol-party">' +
@@ -345,12 +356,9 @@ function renderFreightBolHtml(d) {
     '    <div class="bol-ref-cell"><div class="k">Prepared By</div><div class="v">' + escapeHtml(d.actor || '—') + '</div></div>' +
     '  </div>' +
     '  <div class="bol-parties">' +
-    facilityBlock('Ship From', d.fromLoc, 'OutboundHours', 'OutboundInstructions') +
-    facilityBlock('Ship To', d.toLoc, 'InboundHours', 'InboundInstructions') +
+    facilityBlock('Ship From', d.fromLoc, 'OutboundHours', 'OutboundInstructions', d.fromName, d.fromAddress) +
+    facilityBlock('Ship To', d.toLoc, 'InboundHours', 'InboundInstructions', d.toName, d.toAddress) +
     '  </div>' +
-    (!d.fromLoc || !d.toLoc ? '<div class="bol-parties"><div class="bol-party"><div class="line muted">' +
-      (!d.fromLoc ? escapeHtml(d.fromName) + (d.fromAddress ? ' — ' + escapeHtml(d.fromAddress) : '') : '') + '</div></div>' +
-      '<div class="bol-party"><div class="line muted">' + (!d.toLoc ? escapeHtml(d.toName) + (d.toAddress ? ' — ' + escapeHtml(d.toAddress) : '') : '') + '</div></div></div>' : '') +
     '  <div class="bol-block">' +
     '  <div class="bol-freight">' +
     '    <div class="bol-freight-cell"><div class="k">Carrier</div><div class="v">' + escapeHtml(d.carrier || '—') + '</div></div>' +
