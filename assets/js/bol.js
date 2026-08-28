@@ -49,6 +49,17 @@ function renderBolHtml(d) {
   return d.docType === 'delivery' ? renderDeliveryReceiptHtml(d) : renderFreightBolHtml(d);
 }
 
+// "Case (12oz x24)" was wrapping mid-parenthesis in a narrow column
+// ("Case (12oz" / "x24)"). Split explicitly instead: "Case" on its own
+// line, the pack spec below it. Package types without a parenthetical
+// (kegs, tap handles) render unchanged.
+function formatPackageType(pkg) {
+  var s = String(pkg || '');
+  var m = s.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  if (!m) return escapeHtml(s);
+  return escapeHtml(m[1].trim()) + '<br>' + escapeHtml(m[2].trim());
+}
+
 // ================= Delivery Receipt / Bill of Lading =================
 // Matches TLM's real paper delivery receipt: navy/yellow banded sections,
 // pricing, condition-of-delivery checkboxes, driver + account signatures.
@@ -83,7 +94,7 @@ function renderDeliveryReceiptHtml(d) {
       '<td class="mono">' + escapeHtml(l.sku) + '</td>' +
       '<td class="mono">' + escapeHtml(l.lot || '—') + '</td>' +
       '<td>' + escapeHtml(l.description) + '</td>' +
-      '<td>' + escapeHtml(l.package || '') + '</td>' +
+      '<td>' + formatPackageType(l.package) + '</td>' +
       '<td class="num">' + escapeHtml(String(l.qty)) + '</td>' +
       '<td class="num">' + (Number(l.weightPerUnit) > 0 ? Number(l.weightPerUnit) : '—') + '</td>' +
       '<td class="num">' + (Number(l.weightPerUnit) > 0 ? lineWeight + ' lbs' : '—') + '</td>' +
@@ -248,7 +259,7 @@ function renderFreightBolHtml(d) {
   var rows = d.lines.map(function (l) {
     return '<tr>' +
       '<td><div class="desc-name">' + escapeHtml(l.description) + '</div><div class="desc-code">' + escapeHtml(l.sku) + '</div></td>' +
-      '<td>' + escapeHtml(l.package || '') + '</td>' +
+      '<td>' + formatPackageType(l.package) + '</td>' +
       '<td class="num">' + escapeHtml(String(l.qty)) + '</td>' +
       '</tr>';
   }).join('');
