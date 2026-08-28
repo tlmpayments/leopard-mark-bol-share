@@ -68,7 +68,11 @@ function skuLabel(s) {
 var LOT_FACILITIES = [
   { code: '01', name: 'East Brother Beer' },
   { code: '02', name: 'Beachwood Brewing' },
-  { code: '03', name: 'Prost Brewing' }
+  { code: '03', name: 'Prost Brewing Company' },
+  { code: '04', name: 'Roundtable Brewing' },
+  { code: '05', name: 'Ale Smith' },
+  { code: '06', name: "Jack's Abby Brewing" },
+  { code: '07', name: 'Real Ale Brewing' }
 ];
 
 function computeLotCode(facilityCode, brand, pkgDateIso, run) {
