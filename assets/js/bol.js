@@ -383,6 +383,12 @@ function renderFreightBolHtml(d) {
 // whatever the browser assumed, which is what produced badly-fitted output.
 var PRINT_PAGE_STYLE =
   '@page { size: letter; margin: 0.4in; }' +
+  // Browsers drop all background-color/background-image on print by default
+  // (the "Background graphics" print-dialog checkbox) — this is what strips
+  // the navy bars, yellow highlight, and shaded panels down to bare
+  // borders. Forcing color-adjust makes backgrounds print unconditionally,
+  // regardless of that checkbox.
+  '* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }' +
   'html, body { margin: 0; padding: 0; }' +
   'body { background: #eceef1; }' +
   '.print-page { width: 100%; max-width: 8.2in; margin: 0 auto 24px; background: #fff; padding: 24px; box-sizing: border-box; }' +
