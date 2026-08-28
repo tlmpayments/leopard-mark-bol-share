@@ -101,6 +101,28 @@ html, body {
   font-weight: 600;
   color: var(--silver);
 }
+
+.field-label-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 5px; }
+.field-label-row label { margin: 0; }
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  padding: 0;
+}
+.btn-link:hover { text-decoration: underline; }
+
+.custom-acct-panel {
+  background: var(--navy-800);
+  border: 1px solid var(--navy-600);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.custom-acct-panel .form-grid { margin-top: 4px; }
 .form-field input,
 .form-field select,
 .form-field textarea {

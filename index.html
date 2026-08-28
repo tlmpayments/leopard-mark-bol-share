@@ -39,9 +39,56 @@
           <label>Invoice # <span class="hint">(optional)</span></label>
           <input type="text" id="dlv-invoice" placeholder="e.g. INV-10432" />
         </div>
-        <div class="form-field">
-          <label>Ship To (Account)</label>
+        <div class="form-field span2" id="dlv-account-field">
+          <div class="field-label-row">
+            <label>Ship To (Account)</label>
+            <button type="button" class="btn-link" id="dlv-toggle-custom-acct">+ Custom Address</button>
+          </div>
           <select id="dlv-account"></select>
+        </div>
+        <div class="form-field span2 custom-acct-panel" id="dlv-custom-acct-panel" style="display:none;">
+          <div class="field-label-row">
+            <label>Custom Shipping Address</label>
+            <button type="button" class="btn-link" id="dlv-toggle-custom-acct-off">← Use Existing Account</button>
+          </div>
+          <div class="form-grid">
+            <div class="form-field span2">
+              <label>Business Name</label>
+              <input type="text" id="dlv-custom-name" />
+            </div>
+            <div class="form-field span2">
+              <label>Legal Name <span class="hint">(optional, if different)</span></label>
+              <input type="text" id="dlv-custom-legalname" />
+            </div>
+            <div class="form-field span2">
+              <label>Address Line 1</label>
+              <input type="text" id="dlv-custom-address1" placeholder="Street address" />
+            </div>
+            <div class="form-field span2">
+              <label>Address Line 2 <span class="hint">(optional)</span></label>
+              <input type="text" id="dlv-custom-address2" placeholder="Suite, unit, floor…" />
+            </div>
+            <div class="form-field">
+              <label>City</label>
+              <input type="text" id="dlv-custom-city" />
+            </div>
+            <div class="form-field">
+              <label>State</label>
+              <input type="text" id="dlv-custom-state" />
+            </div>
+            <div class="form-field">
+              <label>ZIP</label>
+              <input type="text" id="dlv-custom-zip" />
+            </div>
+            <div class="form-field">
+              <label>Phone <span class="hint">(optional)</span></label>
+              <input type="text" id="dlv-custom-phone" />
+            </div>
+            <div class="form-field span2">
+              <label>License # <span class="hint">(optional)</span></label>
+              <input type="text" id="dlv-custom-license" />
+            </div>
+          </div>
         </div>
         <div class="form-field span2">
           <label>Delivery Window <span class="hint">(optional)</span></label>

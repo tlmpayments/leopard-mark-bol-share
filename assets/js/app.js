@@ -310,6 +310,47 @@ document.getElementById('dlv-account').addEventListener('change', function () {
   instrEl.value = acct.DeliveryInstructions || '';
 });
 
+// ---------------- Custom shipping address (one-off, not in Accounts) ----------------
+
+function customAddressActive() {
+  return document.getElementById('dlv-custom-acct-panel').style.display !== 'none';
+}
+
+function setCustomAddressMode(active) {
+  document.getElementById('dlv-account-field').style.display = active ? 'none' : '';
+  document.getElementById('dlv-custom-acct-panel').style.display = active ? '' : 'none';
+}
+
+document.getElementById('dlv-toggle-custom-acct').addEventListener('click', function () { setCustomAddressMode(true); });
+document.getElementById('dlv-toggle-custom-acct-off').addEventListener('click', function () { setCustomAddressMode(false); });
+
+function clearCustomAddressFields() {
+  ['dlv-custom-name', 'dlv-custom-legalname', 'dlv-custom-address1', 'dlv-custom-address2',
+    'dlv-custom-city', 'dlv-custom-state', 'dlv-custom-zip', 'dlv-custom-phone', 'dlv-custom-license'
+  ].forEach(function (id) { document.getElementById(id).value = ''; });
+}
+
+function readCustomAddress() {
+  var name = document.getElementById('dlv-custom-name').value.trim();
+  if (!name) return { error: 'Enter a business name for the custom address.' };
+  var line1 = document.getElementById('dlv-custom-address1').value.trim();
+  var line2 = document.getElementById('dlv-custom-address2').value.trim();
+  var city = document.getElementById('dlv-custom-city').value.trim();
+  var state = document.getElementById('dlv-custom-state').value.trim();
+  var zip = document.getElementById('dlv-custom-zip').value.trim();
+  if (!line1 || !city || !state || !zip) return { error: 'Enter a complete delivery address (street, city, state, ZIP).' };
+  var cityStateZip = [city, state].filter(Boolean).join(', ') + (zip ? ' ' + zip : '');
+  return {
+    acct: {
+      BusinessName: name,
+      LegalName: document.getElementById('dlv-custom-legalname').value.trim(),
+      DeliveryAddress: [line1, line2, cityStateZip].filter(Boolean).join(', '),
+      Phone: document.getElementById('dlv-custom-phone').value.trim(),
+      LicenseNumber: document.getElementById('dlv-custom-license').value.trim()
+    }
+  };
+}
+
 // ---------------- Build & render ----------------
 
 function readDeliveryLines() {
@@ -350,9 +391,16 @@ function buildDeliveryDoc() {
   var lines = readDeliveryLines();
   if (!lines.length) return { error: 'Add at least one product line.' };
 
-  var accIdx = document.getElementById('dlv-account').value;
-  if (accIdx === '') return { error: 'Select a Ship To account.' };
-  var acct = DATA.accounts[Number(accIdx)];
+  var acct;
+  if (customAddressActive()) {
+    var customResult = readCustomAddress();
+    if (customResult.error) return { error: customResult.error };
+    acct = customResult.acct;
+  } else {
+    var accIdx = document.getElementById('dlv-account').value;
+    if (accIdx === '') return { error: 'Select a Ship To account, or use a custom address.' };
+    acct = DATA.accounts[Number(accIdx)];
+  }
   var dateIso = document.getElementById('dlv-date').value || todayIso();
 
   return {
@@ -483,6 +531,8 @@ function resetDeliveryForm() {
   document.getElementById('dlv-refnote').value = '';
   document.getElementById('dlv-notes').value = '';
   document.getElementById('dlv-lines').innerHTML = '';
+  clearCustomAddressFields();
+  setCustomAddressMode(false);
   addDeliveryLineRow();
 }
 
