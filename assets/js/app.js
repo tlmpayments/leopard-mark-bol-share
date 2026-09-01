@@ -1,10 +1,13 @@
-// Standalone Bill of Lading maker. Read-only against the same Apps Script
-// backend as inventory.tlmbg.co (accounts/skus/locations/commodities) — this
-// tool never writes an event to the ledger. It just fills in renderBolHtml()
-// (from bol.js, shared verbatim with the inventory app) and opens it in a
+// Standalone Bill of Lading maker, on the same Apps Script backend as
+// inventory.tlmbg.co. Reads reference data (accounts/skus/locations/
+// commodities) from it and fills in renderBolHtml() (from bol.js) to open a
 // print-ready window. Document numbers here are self-generated (DR-/BOL-
 // prefixed) and are NOT the same sequence the inventory app's real ledger
-// uses, since no ledger row is ever created from this page.
+// uses, since this tool never writes an event to the ledger and no
+// inventory ever moves from here. It does write one thing: every generated
+// document is upserted into the backend's separate BOL Maker Log (see
+// saveBolToLog() below) purely so it can be found and re-edited later —
+// that log never touches the ledger either.
 
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
@@ -15,9 +18,26 @@ function escapeHtml(s) {
 
 var DATA = { accounts: [], skus: [], locations: [], commodities: [] };
 
-function apiGet(action) {
-  var url = window.BOL_CONFIG.APPS_SCRIPT_URL + '?action=' + action;
+function apiGet(action, extraQuery) {
+  var url = window.BOL_CONFIG.APPS_SCRIPT_URL + '?action=' + action + (extraQuery ? '&' + extraQuery : '');
   return fetch(url).then(function (r) { return r.json(); });
+}
+
+function apiPost(body) {
+  // text/plain avoids a CORS preflight against the Apps Script web app,
+  // which doesn't handle OPTIONS requests — same approach inventory.tlmbg.co
+  // uses for its POST actions. Apps Script occasionally answers with an
+  // HTML interstitial instead of JSON right after a fresh deploy; guard
+  // against that so a failed save throws instead of choking on r.json().
+  return fetch(window.BOL_CONFIG.APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  }).then(function (r) {
+    var ct = r.headers.get('content-type') || '';
+    if (ct.indexOf('json') === -1) throw new Error('Backend did not return JSON');
+    return r.json();
+  });
 }
 
 function todayIso() {
@@ -226,13 +246,7 @@ function loadReferenceData() {
 // ---------------- Doc type toggle ----------------
 
 document.querySelectorAll('.doc-toggle button').forEach(function (btn) {
-  btn.addEventListener('click', function () {
-    document.querySelectorAll('.doc-toggle button').forEach(function (b) { b.classList.remove('active'); });
-    btn.classList.add('active');
-    var type = btn.dataset.doctype;
-    document.getElementById('form-delivery').style.display = type === 'delivery' ? '' : 'none';
-    document.getElementById('form-freight').style.display = type === 'freight' ? '' : 'none';
-  });
+  btn.addEventListener('click', function () { switchDocType(btn.dataset.doctype); });
 });
 
 // ---------------- Delivery Receipt line items ----------------
@@ -358,9 +372,17 @@ function readDeliveryLines() {
     var skuIdx = tr.querySelector('.dlv-line-sku').value;
     var sku = skuIdx !== '' ? DATA.skus[Number(skuIdx)] : null;
     if (!sku) return null;
+    var facilitySel = tr.querySelector('.dlv-line-facility');
+    var customInput = tr.querySelector('.dlv-line-facility-custom');
     return {
       sku: sku.SKU,
       lot: computeRowLot(tr),
+      // Lot builder inputs, kept alongside the computed lot string purely so
+      // re-opening this line for editing can restore them exactly rather
+      // than trying to reverse-parse the concatenated lot code.
+      lotFacility: facilitySel.value === '__other' ? customInput.value : facilitySel.value,
+      lotPkgDate: tr.querySelector('.dlv-line-pkgdate').value,
+      lotRun: tr.querySelector('.dlv-line-run').value,
       description: sku.Product,
       package: sku.PackageType,
       qty: Number(tr.querySelector('.dlv-line-qty').value) || 0,
@@ -409,6 +431,7 @@ function buildDeliveryDoc() {
       bolNumber: document.getElementById('dlv-bolnumber').value.trim() || generateDocNumber('DR'),
       invoiceNumber: document.getElementById('dlv-invoice').value.trim(),
       date: formatDateDisplay(dateIso),
+      dateIso: dateIso,
       toAccount: acct,
       deliveryWindow: document.getElementById('dlv-window').value.trim(),
       receivingInstructions: document.getElementById('dlv-instructions').value.trim(),
@@ -459,6 +482,7 @@ function buildFreightDoc() {
       docType: 'freight',
       bolNumber: document.getElementById('frt-bolnumber').value.trim() || generateDocNumber('BOL'),
       date: formatDateDisplay(dateIso),
+      dateIso: dateIso,
       eventType: document.getElementById('frt-eventtype').value,
       actor: document.getElementById('frt-actor').value.trim(),
       fromLoc: fromLoc,
@@ -498,6 +522,7 @@ document.getElementById('form-delivery').addEventListener('submit', function (e)
     statusEl.classList.add('error');
     return;
   }
+  saveBolToLog(result.d);
   openBolPrintWindow(result.d);
 });
 
@@ -513,6 +538,7 @@ document.getElementById('form-freight').addEventListener('submit', function (e) 
     statusEl.classList.add('error');
     return;
   }
+  saveBolToLog(result.d);
   openBolPrintWindow(result.d);
 });
 
@@ -522,6 +548,7 @@ var BATCH_LIMIT = 100;
 var batch = [];
 
 function resetDeliveryForm() {
+  setEditingState(null);
   document.getElementById('dlv-bolnumber').value = '';
   document.getElementById('dlv-bolnumber').placeholder = generateDocNumber('DR');
   document.getElementById('dlv-invoice').value = '';
@@ -537,6 +564,7 @@ function resetDeliveryForm() {
 }
 
 function resetFreightForm() {
+  setEditingState(null);
   // "Prepared By" is kept — a batch of freight moves is usually entered by
   // the same person back-to-back, so re-typing a name each time is friction
   // with no real benefit.
@@ -672,6 +700,7 @@ document.getElementById('batch-clear').addEventListener('click', function () {
 
 document.getElementById('batch-print').addEventListener('click', function () {
   if (!batch.length) return;
+  batch.forEach(saveBolToLog);
   openBatchPrintWindow(batch);
 });
 
@@ -693,6 +722,254 @@ function openBatchPrintWindow(items) {
   w.document.write(html);
   w.document.close();
 }
+
+// ---------------- Previously Generated (log) ----------------
+//
+// Every document actually generated (single Generate & Print, or a batch
+// Print Batch) gets upserted into the backend's BOL Maker Log, keyed by its
+// own document #, via saveBolToLog(). This is fire-and-forget — a failed
+// save never blocks printing, it just means that one document won't show
+// up in the list later. Clicking an entry re-fetches its full saved payload
+// and repopulates the matching form for editing; regenerating from there
+// reuses the same document # so the log entry is updated in place rather
+// than duplicated (see handleSaveBolLog on the backend).
+
+function saveBolToLog(d) {
+  apiPost({
+    action: 'saveBolLog',
+    entry: { docNumber: d.bolNumber, docType: d.docType, date: d.dateIso || '', summary: summarizeBatchItem(d), payload: d }
+  }).catch(function (err) { console.error('Failed to save to Previously Generated log', err); });
+}
+
+var editingDocNumber = null;
+
+function setEditingState(docNumber) {
+  editingDocNumber = docNumber;
+  var banner = document.getElementById('editing-banner');
+  if (docNumber) {
+    document.getElementById('editing-banner-docnum').textContent = docNumber;
+    banner.style.display = '';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+document.getElementById('editing-banner-cancel').addEventListener('click', function () {
+  var activeType = document.querySelector('.doc-toggle button.active').dataset.doctype;
+  if (activeType === 'delivery') resetDeliveryForm(); else resetFreightForm();
+});
+
+function switchDocType(type) {
+  document.querySelectorAll('.doc-toggle button').forEach(function (b) { b.classList.toggle('active', b.dataset.doctype === type); });
+  document.getElementById('form-delivery').style.display = type === 'delivery' ? '' : 'none';
+  document.getElementById('form-freight').style.display = type === 'freight' ? '' : 'none';
+}
+
+function findByField(list, field, value) {
+  for (var i = 0; i < list.length; i++) if (list[i][field] === value) return i;
+  return -1;
+}
+
+function findLocationIndex(loc) {
+  if (!loc) return -1;
+  for (var i = 0; i < DATA.locations.length; i++) {
+    var l = DATA.locations[i];
+    if (l.LocationID === loc.LocationID || (l.Name === loc.Name && l.City === loc.City)) return i;
+  }
+  return -1;
+}
+
+function populateDeliveryForm(d) {
+  switchDocType('delivery');
+  document.getElementById('dlv-bolnumber').value = d.bolNumber || '';
+  document.getElementById('dlv-invoice').value = d.invoiceNumber || '';
+  document.getElementById('dlv-date').value = d.dateIso || todayIso();
+
+  var acctIdx = d.toAccount ? findByField(DATA.accounts, 'BusinessName', d.toAccount.BusinessName) : -1;
+  if (acctIdx !== -1) {
+    setCustomAddressMode(false);
+    document.getElementById('dlv-account').value = String(acctIdx);
+  } else {
+    // Account no longer exists under that name (renamed/removed since this
+    // document was made) — fall back to a custom address seeded with
+    // whatever we saved, rather than silently pointing at the wrong account.
+    setCustomAddressMode(true);
+    clearCustomAddressFields();
+    document.getElementById('dlv-custom-name').value = (d.toAccount && d.toAccount.BusinessName) || '';
+    document.getElementById('dlv-custom-legalname').value = (d.toAccount && d.toAccount.LegalName) || '';
+    document.getElementById('dlv-custom-address1').value = (d.toAccount && d.toAccount.DeliveryAddress) || '';
+    document.getElementById('dlv-custom-phone').value = (d.toAccount && d.toAccount.Phone) || '';
+    document.getElementById('dlv-custom-license').value = (d.toAccount && d.toAccount.LicenseNumber) || '';
+  }
+  // Set directly from the saved document rather than through the account
+  // "change" autofill, which would overwrite these with the account's
+  // current details instead of what was actually printed at the time.
+  document.getElementById('dlv-window').value = d.deliveryWindow || '';
+  document.getElementById('dlv-instructions').value = d.receivingInstructions || '';
+  document.getElementById('dlv-refnote').value = d.refNote || '';
+  document.getElementById('dlv-notes').value = d.notes || '';
+
+  document.getElementById('dlv-lines').innerHTML = '';
+  (d.lines || []).forEach(function (line) {
+    addDeliveryLineRow();
+    var tr = document.getElementById('dlv-lines').lastElementChild;
+    var skuIdx = findByField(DATA.skus, 'SKU', line.sku);
+    tr.querySelector('.dlv-line-sku').value = skuIdx !== -1 ? String(skuIdx) : '';
+    var facilitySel = tr.querySelector('.dlv-line-facility');
+    var customInput = tr.querySelector('.dlv-line-facility-custom');
+    var knownFacility = Array.prototype.some.call(facilitySel.options, function (o) { return o.value === line.lotFacility; });
+    if (line.lotFacility && !knownFacility) {
+      facilitySel.value = '__other';
+      customInput.style.display = '';
+      customInput.value = line.lotFacility;
+    } else if (line.lotFacility) {
+      facilitySel.value = line.lotFacility;
+    }
+    tr.querySelector('.dlv-line-pkgdate').value = line.lotPkgDate || '';
+    tr.querySelector('.dlv-line-run').value = line.lotRun || '1';
+    tr.querySelector('.dlv-line-qty').value = line.qty;
+    refreshLotPreview(tr);
+  });
+  if (!(d.lines || []).length) addDeliveryLineRow();
+}
+
+function populateFreightForm(d) {
+  switchDocType('freight');
+  document.getElementById('frt-bolnumber').value = d.bolNumber || '';
+  document.getElementById('frt-date').value = d.dateIso || todayIso();
+  document.getElementById('frt-eventtype').value = d.eventType || 'TRANSFER';
+  document.getElementById('frt-actor').value = d.actor || '';
+
+  var fromIdx = findLocationIndex(d.fromLoc);
+  document.getElementById('frt-from-loc').value = fromIdx !== -1 ? String(fromIdx) : '';
+  document.getElementById('frt-from-name').value = fromIdx === -1 ? (d.fromName || '') : '';
+  document.getElementById('frt-from-address').value = fromIdx === -1 ? (d.fromAddress || '') : '';
+
+  var toIdx = findLocationIndex(d.toLoc);
+  document.getElementById('frt-to-loc').value = toIdx !== -1 ? String(toIdx) : '';
+  document.getElementById('frt-to-name').value = toIdx === -1 ? (d.toName || '') : '';
+  document.getElementById('frt-to-address').value = toIdx === -1 ? (d.toAddress || '') : '';
+
+  document.getElementById('frt-carrier').value = d.carrier || '';
+  document.getElementById('frt-carrier-phone').value = d.carrierPhone || '';
+  document.getElementById('frt-weight').value = d.weight || '';
+  document.getElementById('frt-hu-count').value = d.handlingUnitCount || '';
+  document.getElementById('frt-hu-type').value = d.handlingUnitType || '';
+  document.getElementById('frt-dimensions').value = d.dimensions || '';
+  document.getElementById('frt-freight-class').value = d.freightClass || '';
+  var commodityIdx = findByField(DATA.commodities, 'Name', d.commodityName);
+  document.getElementById('frt-commodity').value = commodityIdx !== -1 ? String(commodityIdx) : '';
+  document.getElementById('frt-origin-appt').value = d.originAppointment || '';
+  document.getElementById('frt-dest-appt').value = d.destinationAppointment || '';
+  document.getElementById('frt-refnote').value = d.refNote || '';
+  document.getElementById('frt-notes').value = d.notes || '';
+
+  document.getElementById('frt-lines').innerHTML = '';
+  (d.lines || []).forEach(function (line) {
+    addFreightLineRow();
+    var tr = document.getElementById('frt-lines').lastElementChild;
+    var skuIdx = findByField(DATA.skus, 'SKU', line.sku);
+    tr.querySelector('.frt-line-sku').value = skuIdx !== -1 ? String(skuIdx) : '';
+    tr.querySelector('.frt-line-qty').value = line.qty;
+  });
+  if (!(d.lines || []).length) addFreightLineRow();
+}
+
+var logEntries = [];
+
+function formatTimestampDisplay(iso) {
+  var d = iso ? new Date(iso) : null;
+  return d && !isNaN(d.getTime()) ? d.toLocaleString() : (iso || '');
+}
+
+// The log's Date column started as a plain "YYYY-MM-DD" string, but Sheets
+// silently auto-converts anything date-shaped into a real Date value, so it
+// can come back as a full ISO timestamp instead. Slice off everything from
+// "T" onward rather than re-parsing with `new Date()` — that avoids
+// re-introducing a timezone shift on the calendar date itself (see the
+// invoice editor's timezone bug for what re-parsing gets wrong).
+function formatLogDate(v) {
+  v = String(v || '');
+  var isoPart = v.indexOf('T') !== -1 ? v.slice(0, v.indexOf('T')) : v;
+  var p = isoPart.split('-');
+  return p.length === 3 ? (p[1] + '/' + p[2] + '/' + p[0]) : v;
+}
+
+function openLogModal() {
+  document.getElementById('log-modal').style.display = 'flex';
+  document.getElementById('log-search').value = '';
+  refreshLogList();
+}
+
+function closeLogModal() {
+  document.getElementById('log-modal').style.display = 'none';
+}
+
+function refreshLogList() {
+  var statusEl = document.getElementById('log-status');
+  statusEl.textContent = 'Loading…';
+  statusEl.classList.remove('error');
+  statusEl.style.display = '';
+  document.getElementById('log-list').innerHTML = '';
+  apiGet('bolLog').then(function (res) {
+    if (!res || !res.ok) throw new Error((res && res.error) || 'Unknown error');
+    logEntries = res.entries || [];
+    if (logEntries.length) {
+      statusEl.style.display = 'none';
+    } else {
+      statusEl.textContent = 'No documents generated yet.';
+    }
+    renderLogList();
+  }).catch(function (err) {
+    console.error('Failed to load Previously Generated log', err);
+    statusEl.textContent = 'Failed to load — check your connection.';
+    statusEl.classList.add('error');
+  });
+}
+
+function renderLogList() {
+  var listEl = document.getElementById('log-list');
+  var q = document.getElementById('log-search').value.trim().toLowerCase();
+  var filtered = !q ? logEntries : logEntries.filter(function (e) {
+    return (String(e.Summary) + ' ' + String(e.DocNumber)).toLowerCase().indexOf(q) !== -1;
+  });
+  if (!logEntries.length) { listEl.innerHTML = ''; return; }
+  if (!filtered.length) { listEl.innerHTML = '<div class="hint">No matching documents.</div>'; return; }
+
+  listEl.innerHTML = filtered.map(function (e) {
+    return '<div class="log-row" data-docnumber="' + escapeHtml(e.DocNumber) + '">' +
+      '<div class="log-row-title">' + escapeHtml(e.Summary || e.DocNumber) + '</div>' +
+      '<div class="log-row-meta">' + escapeHtml(formatLogDate(e.Date)) + ' &middot; Last updated ' + escapeHtml(formatTimestampDisplay(e.UpdatedAt)) + '</div>' +
+      '</div>';
+  }).join('');
+  Array.prototype.slice.call(listEl.querySelectorAll('.log-row')).forEach(function (row) {
+    row.addEventListener('click', function () { loadLogEntry(row.dataset.docnumber); });
+  });
+}
+
+function loadLogEntry(docNumber) {
+  var listEl = document.getElementById('log-list');
+  listEl.style.opacity = '0.5';
+  apiGet('bolLogGet', 'docNumber=' + encodeURIComponent(docNumber)).then(function (res) {
+    listEl.style.opacity = '';
+    if (!res || !res.ok) { alert('Could not load that document: ' + ((res && res.error) || 'unknown error')); return; }
+    if (res.docType === 'freight') populateFreightForm(res.payload);
+    else populateDeliveryForm(res.payload);
+    setEditingState(res.docNumber);
+    closeLogModal();
+  }).catch(function (err) {
+    listEl.style.opacity = '';
+    console.error('Failed to load document', err);
+    alert('Failed to load that document — check your connection.');
+  });
+}
+
+document.getElementById('open-log-btn').addEventListener('click', openLogModal);
+document.getElementById('close-log-btn').addEventListener('click', closeLogModal);
+document.getElementById('log-modal').addEventListener('click', function (e) {
+  if (e.target.id === 'log-modal') closeLogModal();
+});
+document.getElementById('log-search').addEventListener('input', renderLogList);
 
 // ---------------- Init ----------------
 

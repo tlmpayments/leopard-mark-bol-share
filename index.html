@@ -13,11 +13,30 @@
     <img class="brand-logo" src="assets/img/logo-white.png" alt="The Leopard Mark Brewing Co." onerror="this.style.display='none'" />
     <h1>Bill of Lading Maker</h1>
     <div class="sub">Fill in the details below, then generate a printable document.</div>
+    <button type="button" class="btn-link" id="open-log-btn">Previously Generated</button>
+  </div>
+
+  <div class="editing-banner" id="editing-banner" style="display:none;">
+    Editing <span id="editing-banner-docnum"></span> — Generate &amp; Print again to save your changes.
+    <button type="button" class="btn-link" id="editing-banner-cancel">Start New Document</button>
   </div>
 
   <div class="doc-toggle">
     <button type="button" class="active" data-doctype="delivery">Delivery Receipt</button>
     <button type="button" data-doctype="freight">Freight / Straight BOL</button>
+  </div>
+
+  <!-- ============== PREVIOUSLY GENERATED MODAL ============== -->
+  <div class="modal-overlay" id="log-modal" style="display:none;">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div class="modal-title">Previously Generated</div>
+        <button type="button" class="btn-link" id="close-log-btn">Close</button>
+      </div>
+      <input type="text" id="log-search" class="log-search" placeholder="Search by document #, account, or route…" />
+      <div id="log-status" class="hint">Loading…</div>
+      <div id="log-list" class="log-list"></div>
+    </div>
   </div>
 
   <!-- ============== DELIVERY RECEIPT FORM ============== -->
