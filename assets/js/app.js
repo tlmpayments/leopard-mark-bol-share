@@ -18,9 +18,34 @@ function escapeHtml(s) {
 
 var DATA = { accounts: [], skus: [], locations: [], commodities: [] };
 
+// Every apiGet caller can hit the same Apps Script sign-in bounce, so the
+// wording lives in one place rather than being re-guessed at each call site.
+function apiErrorText(err, whatFailed) {
+  if (err && err.notJson) {
+    return 'Google returned a sign-in page instead of data. Sign in as the account that owns this tool — or open this page in a private window — then reload.';
+  }
+  return whatFailed + ' (' + ((err && err.message) || 'unknown error') + '). Reload the page to try again.';
+}
+
 function apiGet(action, extraQuery) {
   var url = window.BOL_CONFIG.APPS_SCRIPT_URL + '?action=' + action + (extraQuery ? '&' + extraQuery : '');
-  return fetch(url).then(function (r) { return r.json(); });
+  return fetch(url).then(function (r) {
+    // The same guard apiPost has always had, which this function never got.
+    // Apps Script answers with HTML rather than JSON in two situations that
+    // are indistinguishable from here: an interstitial right after a fresh
+    // deploy, and a bounce to the Google account chooser when the browser
+    // carries cookies for more than one signed-in account. Unguarded,
+    // r.json() throws a SyntaxError about an unexpected '<' -- which tells
+    // whoever is looking at it precisely nothing. Flag it instead so the
+    // caller can name the real cause.
+    var ct = r.headers.get('content-type') || '';
+    if (ct.indexOf('json') === -1) {
+      var err = new Error('NOT_JSON');
+      err.notJson = true;
+      throw err;
+    }
+    return r.json();
+  });
 }
 
 function apiPost(body) {
@@ -213,13 +238,11 @@ function loadReferenceData() {
   document.getElementById('dlv-status').textContent = 'Loading accounts & SKUs…';
   document.getElementById('frt-status').textContent = 'Loading facilities, SKUs & commodities…';
 
-  return Promise.all([
-    apiGet('accounts'), apiGet('skus'), apiGet('locations'), apiGet('commodities')
-  ]).then(function (results) {
-    DATA.accounts = (results[0] && results[0].accounts) || [];
-    DATA.skus = expandTapHandleSkus((results[1] && results[1].skus) || []);
-    DATA.locations = (results[2] && results[2].locations) || [];
-    DATA.commodities = (results[3] && results[3].commodities) || [];
+  function apply(res) {
+    DATA.accounts = res.accounts || [];
+    DATA.skus = expandTapHandleSkus(res.skus || []);
+    DATA.locations = res.locations || [];
+    DATA.commodities = res.commodities || [];
 
     fillSelect(document.getElementById('dlv-account'), DATA.accounts, function (a) { return a.BusinessName; }, '— Select account —');
     fillSelect(document.getElementById('frt-from-loc'), DATA.locations, function (l) { return l.Name + (l.City ? ' (' + l.City + ', ' + l.State + ')' : ''); }, '— Select facility —');
@@ -231,16 +254,57 @@ function loadReferenceData() {
     addFreightLineRow();
     setFormsEnabled(true);
     renderBatchList();
-    document.getElementById('dlv-status').textContent = '';
-    document.getElementById('frt-status').textContent = '';
-  }).catch(function (err) {
+
+    // A partial read still leaves the forms usable -- a delivery receipt can
+    // be raised against a custom address with no account list -- so say
+    // what's missing instead of blocking everything. But don't let an empty
+    // dropdown pass for real data either.
+    var partial = res.error ? res.error + ' — reload to try again.' : '';
+    ['dlv-status', 'frt-status'].forEach(function (id) {
+      var el = document.getElementById(id);
+      el.textContent = partial;
+      el.classList.toggle('error', !!partial);
+    });
+  }
+
+  function fail(err) {
     console.error('Failed to load reference data', err);
-    var msg = 'Failed to load accounts/SKUs — check your connection and reload the page.';
-    document.getElementById('dlv-status').textContent = msg;
-    document.getElementById('dlv-status').classList.add('error');
-    document.getElementById('frt-status').textContent = msg;
-    document.getElementById('frt-status').classList.add('error');
-  });
+    // Naming the actual cause matters. "Check your connection" sent people
+    // to look at their wifi when the real problem was Google answering with
+    // a sign-in page for a browser with several accounts logged in.
+    var msg = apiErrorText(err, 'Could not load accounts/SKUs');
+    ['dlv-status', 'frt-status'].forEach(function (id) {
+      var el = document.getElementById(id);
+      el.textContent = msg;
+      el.classList.add('error');
+    });
+  }
+
+  // One request, not four. Apps Script serializes executions per user, so
+  // firing accounts/skus/locations/commodities in parallel never overlapped
+  // -- they queued, and whichever lost the race routinely took ~9s.
+  // Promise.all also rejects the moment any one of them fails, so a single
+  // slow or bounced call used to take down the whole page.
+  return apiGet('refData')
+    .then(function (res) {
+      if (res && res.accounts) return res;
+      // Talking to a deployment that predates the refData action: fall back
+      // to the four separate calls so the page still works while the backend
+      // catches up.
+      return Promise.all([
+        apiGet('accounts'), apiGet('skus'), apiGet('locations'), apiGet('commodities')
+      ]).then(function (r) {
+        return {
+          ok: true,
+          accounts: (r[0] && r[0].accounts) || [],
+          skus: (r[1] && r[1].skus) || [],
+          locations: (r[2] && r[2].locations) || [],
+          commodities: (r[3] && r[3].commodities) || []
+        };
+      });
+    })
+    .then(apply)
+    .catch(fail);
 }
 
 // ---------------- Doc type toggle ----------------
@@ -922,7 +986,7 @@ function refreshLogList() {
     renderLogList();
   }).catch(function (err) {
     console.error('Failed to load Previously Generated log', err);
-    statusEl.textContent = 'Failed to load — check your connection.';
+    statusEl.textContent = apiErrorText(err, 'Could not load the document log');
     statusEl.classList.add('error');
   });
 }
@@ -960,7 +1024,7 @@ function loadLogEntry(docNumber) {
   }).catch(function (err) {
     listEl.style.opacity = '';
     console.error('Failed to load document', err);
-    alert('Failed to load that document — check your connection.');
+    alert(apiErrorText(err, 'Could not load that document'));
   });
 }
 
