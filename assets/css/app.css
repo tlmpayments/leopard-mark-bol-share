@@ -346,3 +346,24 @@ html, body {
   .form-actions { flex-direction: column-reverse; }
   .batch-actions { flex-direction: column; align-items: stretch; }
 }
+
+/* Ship-To preview: the selected account's details, echoed under the picker.
+   Deliberately mirrors exactly the five fields the printed SHIP TO block
+   uses (business name, legal name when it differs, delivery address, phone,
+   license #) so what's on screen is what lands on the document. */
+.acct-preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--navy-800);
+  border: 1px solid var(--navy-600);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--silver);
+}
+.acct-preview .ap-name { font-weight: 600; color: var(--white); font-size: 13px; }
+.acct-preview .ap-legal { color: var(--silver-dim); font-style: italic; }
+.acct-preview .ap-addr { margin-top: 3px; }
+.acct-preview .ap-meta { margin-top: 3px; color: var(--silver-dim); }
+.acct-preview .ap-missing { color: var(--warn, #c98500); }

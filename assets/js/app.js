@@ -378,10 +378,47 @@ document.getElementById('frt-add-line').addEventListener('click', addFreightLine
 
 // ---------------- Account autofill ----------------
 
+// Echoes the selected account's on-file details under the picker. The
+// dropdown only ever showed BusinessName, and the address first appeared on
+// the generated document -- so picking the wrong one of two similarly named
+// accounts wasn't visible until after printing.
+//
+// Shows exactly the five fields the printed SHIP TO block uses (see
+// partyBlock in bol.js): business name, legal name when it differs, delivery
+// address, phone, license #. Anything the account is missing is called out
+// rather than silently omitted, because a blank on screen and a blank on the
+// document look the same until the driver is holding it.
+function renderAccountPreview() {
+  var el = document.getElementById('dlv-account-preview');
+  var idx = document.getElementById('dlv-account').value;
+  if (idx === '') {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  var a = DATA.accounts[Number(idx)] || {};
+  var legal = (a.LegalName && a.LegalName !== a.BusinessName) ? a.LegalName : '';
+  var meta = [];
+  if (a.Phone) meta.push(escapeHtml(String(a.Phone)));
+  meta.push(a.LicenseNumber
+    ? 'License #' + escapeHtml(String(a.LicenseNumber))
+    : '<span class="ap-missing">no license # on file</span>');
+
+  el.innerHTML =
+    '<div class="ap-name">' + escapeHtml(a.BusinessName || '—') + '</div>' +
+    (legal ? '<div class="ap-legal">' + escapeHtml(legal) + '</div>' : '') +
+    '<div class="ap-addr">' + (a.DeliveryAddress
+      ? escapeHtml(a.DeliveryAddress)
+      : '<span class="ap-missing">No delivery address on file — use + Custom Address</span>') + '</div>' +
+    '<div class="ap-meta">' + meta.join(' · ') + '</div>';
+  el.style.display = '';
+}
+
 document.getElementById('dlv-account').addEventListener('change', function () {
   var idx = this.value;
   var windowEl = document.getElementById('dlv-window');
   var instrEl = document.getElementById('dlv-instructions');
+  renderAccountPreview();
   if (idx === '') {
     windowEl.value = '';
     instrEl.value = '';
@@ -621,6 +658,7 @@ function resetDeliveryForm() {
   document.getElementById('dlv-bolnumber').placeholder = generateDocNumber('DR');
   document.getElementById('dlv-invoice').value = '';
   document.getElementById('dlv-account').value = '';
+  renderAccountPreview();
   document.getElementById('dlv-window').value = '';
   document.getElementById('dlv-instructions').value = '';
   document.getElementById('dlv-refnote').value = '';
@@ -857,6 +895,10 @@ function populateDeliveryForm(d) {
   if (acctIdx !== -1) {
     setCustomAddressMode(false);
     document.getElementById('dlv-account').value = String(acctIdx);
+    // Assigning .value doesn't fire 'change', so the preview has to be
+    // refreshed by hand here or a re-opened document shows a selected
+    // account with no address under it.
+    renderAccountPreview();
   } else {
     // Account no longer exists under that name (renamed/removed since this
     // document was made) — fall back to a custom address seeded with

@@ -62,6 +62,10 @@
             <button type="button" class="btn-link" id="dlv-toggle-custom-acct">+ Custom Address</button>
           </div>
           <select id="dlv-account"></select>
+          <!-- Read-only echo of the account's on-file details. The address
+               only ever appeared on the generated document before, so there
+               was no way to catch the wrong account until after printing. -->
+          <div class="acct-preview" id="dlv-account-preview" style="display:none;"></div>
         </div>
         <div class="form-field span2 custom-acct-panel" id="dlv-custom-acct-panel" style="display:none;">
           <div class="field-label-row">
