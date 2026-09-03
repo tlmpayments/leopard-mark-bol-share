@@ -103,7 +103,11 @@ function fillSelect(select, items, labelFn, placeholder) {
 }
 
 function skuLabel(s) {
-  return [s.Brand, s.Product, s.PackageType].filter(Boolean).join(' — ');
+  // Shows the prefixed, document-facing code (displaySku, in bol.js) so what
+  // the dropdown says matches what prints, without the stored payload ever
+  // carrying the prefix.
+  return [s.Brand, s.Product, s.PackageType].filter(Boolean).join(' — ') +
+    (s.SKU ? ' [' + displaySku(s.SKU) + ']' : '');
 }
 
 // Lot/Batch Code = Facility(2) + Brand(3) + YY + MM + DD + Run/Variation(1),

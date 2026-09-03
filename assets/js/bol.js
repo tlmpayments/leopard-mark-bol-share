@@ -8,6 +8,30 @@
 //    appointments.
 // renderBolHtml(d) dispatches between them on d.docType.
 
+// Documents leave the building, so every SKU prints namespaced as TLM-<code>.
+//
+// Applied here at render time rather than by renaming the SKU Master: the
+// Inventory Ledger and the BOL Maker Log both store the bare codes, and the
+// order app's PRICE_MAP / UPC_MAP are keyed on them too, so renaming the
+// master would break those joins for every historical row while changing
+// nothing about what that sheet is actually for. It also has to stay out of
+// the saved payload -- populateDeliveryForm re-matches line.sku against the
+// SKU dropdown by exact value, so a prefixed payload would come back with an
+// empty SKU whenever someone re-opened a logged document.
+//
+// Same reasoning expandTapHandleSkus already documents for its Standard /
+// Premium split: this is a document-facing code, not an inventory one.
+//
+// Idempotent, so if the master is ever renamed to the prefixed form this
+// stops adding a second prefix.
+var SKU_DOC_PREFIX = 'TLM-';
+
+function displaySku(sku) {
+  var code = String(sku == null ? '' : sku).trim();
+  if (!code) return '';
+  return code.indexOf(SKU_DOC_PREFIX) === 0 ? code : SKU_DOC_PREFIX + code;
+}
+
 // Freight class density table: standard NMFC density-based classes.
 // This is an ESTIMATE for planning purposes only — always confirm the actual
 // class/NMFC # with your carrier before the shipment bills.
@@ -91,7 +115,7 @@ function renderDeliveryReceiptHtml(d) {
   var rows = lines.map(function (l) {
     var lineWeight = (Number(l.qty) || 0) * (Number(l.weightPerUnit) || 0);
     return '<tr>' +
-      '<td class="mono">' + escapeHtml(l.sku) + '</td>' +
+      '<td class="mono">' + escapeHtml(displaySku(l.sku)) + '</td>' +
       '<td class="mono">' + escapeHtml(l.lot || '—') + '</td>' +
       '<td>' + escapeHtml(l.description) + '</td>' +
       '<td>' + formatPackageType(l.package) + '</td>' +
@@ -258,7 +282,7 @@ function renderDeliveryReceiptHtml(d) {
 function renderFreightBolHtml(d) {
   var rows = d.lines.map(function (l) {
     return '<tr>' +
-      '<td><div class="desc-name">' + escapeHtml(l.description) + '</div><div class="desc-code">' + escapeHtml(l.sku) + '</div></td>' +
+      '<td><div class="desc-name">' + escapeHtml(l.description) + '</div><div class="desc-code">' + escapeHtml(displaySku(l.sku)) + '</div></td>' +
       '<td>' + formatPackageType(l.package) + '</td>' +
       '<td class="num">' + escapeHtml(String(l.qty)) + '</td>' +
       '</tr>';
