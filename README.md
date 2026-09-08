@@ -28,6 +28,26 @@ actual ledger rows). Instead it generates its own `DR-<yymmdd>-####` /
 `BOL-<yymmdd>-####` numbers, editable before printing in case a specific
 number needs to match something else.
 
+## Warehouse item numbers
+
+The `SKU` column on every generated document prints the **receiving
+warehouse's own item number**, not our bare SKU Master code — the printed
+document is what the warehouse types into their search box, and their search
+is exact-match.
+
+`WAREHOUSE_ITEM_NUMBERS` in `assets/js/bol.js` holds WLA's (Balmuth & Co.,
+Wilmington) codes, transcribed from their "Leopard Mark Inventory"
+lot-balance export. They append `-M` to kegs and `-6PK` to cases, and store
+the glassware with no `TLM-` prefix at all. SKUs not in that table fall
+through to the old blanket `TLM-` prefix.
+
+When WLA sends a new inventory export, diff the `Product` column against
+that table. Two known quirks are intentional, not typos to "fix":
+
+- `SGB1AKSB01` → `TLM-SBG1AKSB01-M`. WLA has the brand letters transposed
+  on that one item. It is their typo, but it is what their search matches.
+- `GLW-PT-16-CNT-01` maps to itself, with no prefix.
+
 ## Files
 
 - `index.html` — the form UI (doc-type toggle, delivery receipt fields,

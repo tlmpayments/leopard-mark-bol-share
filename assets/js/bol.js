@@ -8,27 +8,71 @@
 //    appointments.
 // renderBolHtml(d) dispatches between them on d.docType.
 
-// Documents leave the building, so every SKU prints namespaced as TLM-<code>.
+// Every SKU prints as the receiving warehouse's own item number, because the
+// printed document is what the warehouse types into their search box.
 //
-// Applied here at render time rather than by renaming the SKU Master: the
-// Inventory Ledger and the BOL Maker Log both store the bare codes, and the
-// order app's PRICE_MAP / UPC_MAP are keyed on them too, so renaming the
-// master would break those joins for every historical row while changing
-// nothing about what that sheet is actually for. It also has to stay out of
-// the saved payload -- populateDeliveryForm re-matches line.sku against the
-// SKU dropdown by exact value, so a prefixed payload would come back with an
-// empty SKU whenever someone re-opened a logged document.
+// WLA (Balmuth & Co., Wilmington) appends a packaging suffix to every beer
+// item -- -M on kegs, -6PK on cases -- and stores the glassware with no
+// TLM- prefix at all. The blanket SKU_DOC_PREFIX below got both of those
+// wrong: it printed TLM-CNT1AKHB01 where their system has
+// TLM-CNT1AKHB01-M, and TLM-GLW-PT-16-CNT-01 where their system has plain
+// GLW-PT-16-CNT-01. Neither returns a hit on an exact-match search, which
+// is the whole reason the warehouse kicked the 09/04 BOLs back.
+//
+// Codes below are transcribed from WLA's own "Leopard Mark Inventory"
+// lot-balance export (09/04/2026; identical in the 08/31 export, so these
+// are their settled item numbers and not a one-off).
+//
+// Deliberately a literal table rather than a suffix rule derived from
+// PackageType, for two reasons:
+//  - WLA has the Sunlight Groove 1/6 keg on file as TLM-SBG1AKSB01-M, with
+//    the brand letters transposed (SBG, not SGB -- their other two Sunlight
+//    Groove items are SGB). It is a typo, but it is *their* typo and it is
+//    what their search matches, so that is what has to print. No rule
+//    derived from our SKU Master would ever produce it.
+//  - A SKU absent from this table has no confirmed warehouse item number.
+//    A plausible-looking guess ("add -M, it's a keg") fails their exact
+//    search just as badly as a bare code, while looking authoritative on a
+//    signed document. Those fall through to the old TLM- prefix instead.
+//
+// Keyed on the bare SKU Master code, and applied here at render time rather
+// than by renaming the SKU Master: the Inventory Ledger and the BOL Maker
+// Log both store the bare codes, and the order app's PRICE_MAP / UPC_MAP are
+// keyed on them too, so renaming the master would break those joins for
+// every historical row while changing nothing about what that sheet is for.
+// It also has to stay out of the saved payload -- populateDeliveryForm
+// re-matches line.sku against the SKU dropdown by exact value, so a mapped
+// payload would come back with an empty SKU whenever someone re-opened a
+// logged document.
 //
 // Same reasoning expandTapHandleSkus already documents for its Standard /
 // Premium split: this is a document-facing code, not an inventory one.
-//
-// Idempotent, so if the master is ever renamed to the prefixed form this
-// stops adding a second prefix.
+var WAREHOUSE_ITEM_NUMBERS = {
+  'CNT1AKHB01': 'TLM-CNT1AKHB01-M',
+  'CNT1AKSB01': 'TLM-CNT1AKSB01-M',
+  'CNT1AC1224': 'TLM-CNT1AC1224-6PK',
+  'SGB1AKHB01': 'TLM-SGB1AKHB01-M',
+  'SGB1AKSB01': 'TLM-SBG1AKSB01-M',
+  'SGB1AC1224': 'TLM-SGB1AC1224-6PK',
+  'GLW-PT-16-CNT-01': 'GLW-PT-16-CNT-01'
+};
+
+// Fallback for SKUs with no confirmed warehouse item number (SoCal, Giro
+// Splendido, the experimental brands, tap handles -- none of which WLA
+// stocks). Unchanged from the previous behaviour so nothing that already
+// printed correctly moves.
 var SKU_DOC_PREFIX = 'TLM-';
 
+// Idempotent in both directions: a bare code maps forward, and a code that
+// is already in warehouse form passes through untouched rather than picking
+// up a second prefix.
 function displaySku(sku) {
   var code = String(sku == null ? '' : sku).trim();
   if (!code) return '';
+  if (WAREHOUSE_ITEM_NUMBERS[code]) return WAREHOUSE_ITEM_NUMBERS[code];
+  for (var k in WAREHOUSE_ITEM_NUMBERS) {
+    if (WAREHOUSE_ITEM_NUMBERS[k] === code) return code;
+  }
   return code.indexOf(SKU_DOC_PREFIX) === 0 ? code : SKU_DOC_PREFIX + code;
 }
 
